@@ -2320,13 +2320,15 @@ out:
 int sdhci_suspend_host(struct sdhci_host *host, pm_message_t state)
 {
 	int ret = 0;
+	bool has_tuning_timer;
 	struct mmc_host *mmc = host->mmc;
 
 	sdhci_disable_card_detection(host);
 
 	/* Disable tuning since we are suspending */
-	if (host->version >= SDHCI_SPEC_300 && host->tuning_count &&
-	    host->tuning_mode == SDHCI_TUNING_MODE_1) {
+	has_tuning_timer = host->version >= SDHCI_SPEC_300 &&
+		host->tuning_count && host->tuning_mode == SDHCI_TUNING_MODE_1;
+	if (has_tuning_timer) {
 		host->flags &= ~SDHCI_NEEDS_RETUNING;
 		mod_timer(&host->tuning_timer, jiffies +
 			host->tuning_count * HZ);
@@ -2334,8 +2336,17 @@ int sdhci_suspend_host(struct sdhci_host *host, pm_message_t state)
 
 	if (mmc->card) {
 		ret = mmc_suspend_host(host->mmc);
-		if (ret)
-			goto err_suspend_host;
+		if (ret) {
+			if (has_tuning_timer) {
+				host->flags |= SDHCI_NEEDS_RETUNING;
+				mod_timer(&host->tuning_timer, jiffies +
+						host->tuning_count * HZ);
+			}
+
+			sdhci_enable_card_detection(host);
+
+			return ret;
+		}
 	}
 
 	if (mmc->pm_flags & MMC_PM_KEEP_POWER)
