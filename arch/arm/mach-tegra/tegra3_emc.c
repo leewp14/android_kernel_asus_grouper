@@ -1191,6 +1191,24 @@ int tegra_emc_set_eack_state(unsigned long state)
 	return 0;
 }
 
+int tegra_emc_set_eack_state(unsigned long state)
+{
+	unsigned long flags;
+	u32 mc_override;
+
+	spin_lock_irqsave(&emc_access_lock, flags);
+
+	mc_override = mc_readl(MC_EMEM_ARB_OVERRIDE);
+
+	if (state)
+		enable_early_ack(mc_override);
+	else
+		disable_early_ack(mc_override);
+
+	spin_unlock_irqrestore(&emc_access_lock, flags);
+	return 0;
+}
+
 #ifdef CONFIG_DEBUG_FS
 
 static struct dentry *emc_debugfs_root;
@@ -1295,7 +1313,7 @@ static int __init tegra_emc_debug_init(void)
 		goto err_out;
 
 	if (!debugfs_create_file(
-		"eack_state", S_IRUGO | S_IWUSR, emc_debugfs_root, NULL, &eack_state_fops))
+		"eack_state", S_IRUGO | S_IWUGO, emc_debugfs_root, NULL, &eack_state_fops))
 		goto err_out;
 
 	return 0;
