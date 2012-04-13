@@ -26,6 +26,7 @@
 #include "dev.h"
 #include "debug.h"
 #include "chip_support.h"
+#include "chip_support.h"
 
 pid_t nvhost_debug_null_kickoff_pid;
 unsigned int nvhost_debug_trace_cmdbuf;

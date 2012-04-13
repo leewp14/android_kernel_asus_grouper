@@ -23,6 +23,7 @@
 #include <linux/types.h>
 #include "bus.h"
 
+
 struct output;
 struct nvhost_waitchk;
 struct nvhost_userctx_timeout;
