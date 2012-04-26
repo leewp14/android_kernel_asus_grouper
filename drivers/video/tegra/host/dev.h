@@ -30,9 +30,6 @@
 #define TRACE_MAX_LENGTH	128U
 #define IFACE_NAME		"nvhost"
 
-extern int nvhost_major;
-extern int nvhost_minor;
-
 struct nvhost_hwctx;
 
 struct nvhost_master {
