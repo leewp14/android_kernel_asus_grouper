@@ -287,6 +287,14 @@ static void tegra_auto_hotplug_work_func(struct work_struct *work)
 		last_change_time = now;
 		hp_stats_update(cpu, up);
 	}
+
+	if (!up && ((now - last_change_time) < down_delay))
+			cpu = nr_cpu_ids;
+
+	if (cpu < nr_cpu_ids) {
+		last_change_time = now;
+		hp_stats_update(cpu, up);
+	}
 	mutex_unlock(tegra3_cpu_lock);
 
 	if (cpu < nr_cpu_ids) {
