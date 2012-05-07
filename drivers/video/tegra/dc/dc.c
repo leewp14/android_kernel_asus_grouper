@@ -3008,6 +3008,8 @@ static int tegra_dc_probe(struct nvhost_device *ndev)
 
 	tegra_dc_feature_register(dc);
 
+	tegra_dc_feature_register(dc);
+
 	if (dc->pdata->default_out)
 		tegra_dc_set_out(dc, dc->pdata->default_out);
 	else
