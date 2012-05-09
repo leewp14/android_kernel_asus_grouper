@@ -21,6 +21,7 @@
 #include <linux/nvhost_ioctl.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
+#include <trace/events/nvhost.h>
 #include "nvhost_syncpt.h"
 #include "dev.h"
 
@@ -71,7 +72,7 @@ u32 nvhost_syncpt_update_min(struct nvhost_syncpt *sp, u32 id)
 {
 	u32 val;
 
-	BUG_ON(!syncpt_op().update_min);
+	BUG_ON(!syncpt_op(sp).update_min);
 
 	val = syncpt_op(sp).update_min(sp, id);
 	trace_nvhost_syncpt_update_min(id, val);
