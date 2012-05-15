@@ -387,6 +387,7 @@ struct tegra_dc_out {
 	int	(*prepoweroff)(void);
 	int	(*enable)(void);
 	int	(*postpoweron)(void);
+	int	(*prepoweroff)(void);
 	int	(*disable)(void);
 
 	int	(*hotplug_init)(void);
