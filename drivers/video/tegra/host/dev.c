@@ -36,16 +36,18 @@
 
 #include <linux/nvhost.h>
 #include <linux/nvhost_ioctl.h>
-#include <mach/nvmap.h>
 #include <mach/gpufuse.h>
 #include <mach/hardware.h>
 #include <mach/iomap.h>
 
 #include "debug.h"
-#include "nvhost_job.h"
 #include "t20/t20.h"
 #include "t30/t30.h"
 #include "bus_client.h"
+#include "nvhost_acm.h"
+#include <linux/nvmap.h>
+#include "nvhost_channel.h"
+#include "nvhost_job.h"
 
 #define DRIVER_NAME		"host1x"
 
