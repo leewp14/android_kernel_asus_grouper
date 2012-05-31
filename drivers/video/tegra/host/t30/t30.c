@@ -32,6 +32,8 @@
 #include "host1x/host1x_cdma.h"
 #include "host1x/host1x_syncpt.h"
 #include "chip_support.h"
+#include "nvmap.h"
+#include "nvhost_memmgr.h"
 
 #define NVMODMUTEX_2D_FULL	(1)
 #define NVMODMUTEX_2D_SIMPLE	(2)
@@ -253,6 +255,9 @@ int nvhost_init_t30_support(struct nvhost_master *host,
 	if (err)
 		return err;
 	err = nvhost_init_t20_intr_support(op);
+	if (err)
+		return err;
+	err = nvhost_memmgr_init(op);
 	if (err)
 		return err;
 

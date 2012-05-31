@@ -25,12 +25,12 @@
 #include "nvhost_syncpt.h"
 #include "nvhost_intr.h"
 #include "nvhost_channel.h"
-#include "chip_support.h"
 
 #define TRACE_MAX_LENGTH	128U
 #define IFACE_NAME		"nvhost"
 
 struct nvhost_hwctx;
+struct mem_mgr;
 
 struct nvhost_master {
 	void __iomem *aperture;
@@ -40,7 +40,7 @@ struct nvhost_master {
 	struct cdev cdev;
 	struct device *ctrl;
 	struct nvhost_syncpt syncpt;
-	struct nvmap_client *nvmap;
+	struct mem_mgr *memmgr;
 	struct nvhost_intr intr;
 	struct nvhost_device *dev;
 	atomic_t clientid;

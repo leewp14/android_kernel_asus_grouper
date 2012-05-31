@@ -24,6 +24,7 @@
 #include <trace/events/nvhost.h>
 #include "nvhost_syncpt.h"
 #include "dev.h"
+#include "chip_support.h"
 
 #define MAX_SYNCPT_LENGTH 5
 /* Name of sysfs node for min and max value */

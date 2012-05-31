@@ -20,14 +20,14 @@
 
 #include "nvhost_intr.h"
 #include "dev.h"
+#include "nvhost_acm.h"
 #include <linux/interrupt.h>
 #include <linux/slab.h>
 #include <linux/irq.h>
 #include <trace/events/nvhost.h>
-
-
-
-
+#include "nvhost_channel.h"
+#include "nvhost_hwctx.h"
+#include "chip_support.h"
 
 /*** Wait list management ***/
 
