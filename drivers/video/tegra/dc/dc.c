@@ -1302,6 +1302,15 @@ int tegra_dc_update_windows(struct tegra_dc_win *windows[], int n)
 
 	tegra_dc_writel(dc, update_mask << 8, DC_CMD_STATE_CONTROL);
 
+	tegra_dc_writel(dc, FRAME_END_INT | V_BLANK_INT, DC_CMD_INT_STATUS);
+	if (!no_vsync) {
+		set_bit(V_BLANK_FLIP, &dc->vblank_ref_count);
+		tegra_dc_unmask_interrupt(dc, FRAME_END_INT | V_BLANK_INT | ALL_UF_INT);
+	} else {
+		clear_bit(V_BLANK_FLIP, &dc->vblank_ref_count);
+		tegra_dc_mask_interrupt(dc, FRAME_END_INT | V_BLANK_INT | ALL_UF_INT);
+	}
+
 	if (dc->out->flags & TEGRA_DC_OUT_ONE_SHOT_MODE)
 		schedule_delayed_work(&dc->one_shot_work,
 				msecs_to_jiffies(dc->one_shot_delay_ms));
@@ -2078,6 +2087,10 @@ static void tegra_dc_vblank(struct work_struct *work)
 		mutex_unlock(&dc->lock);
 		return;
 	}
+
+	/* Clear the V_BLANK_FLIP bit of vblank ref-count if update is clean. */
+	if (!tegra_dc_windows_are_dirty(dc))
+		clear_bit(V_BLANK_FLIP, &dc->vblank_ref_count);
 
 	/* Clear the V_BLANK_FLIP bit of vblank ref-count if update is clean. */
 	if (!tegra_dc_windows_are_dirty(dc))

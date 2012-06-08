@@ -202,6 +202,10 @@ static inline void tegra_dc_unmask_interrupt(struct tegra_dc *dc, u32 int_val);
 static inline void tegra_dc_mask_interrupt(struct tegra_dc *dc, u32 int_val);
 static bool tegra_dc_windows_are_dirty(struct tegra_dc *dc);
 
+static inline void tegra_dc_unmask_interrupt(struct tegra_dc *dc, u32 int_val);
+static inline void tegra_dc_mask_interrupt(struct tegra_dc *dc, u32 int_val);
+static bool tegra_dc_windows_are_dirty(struct tegra_dc *dc);
+
 void tegra_dc_setup_clk(struct tegra_dc *dc, struct clk *clk);
 
 extern struct tegra_dc_out_ops tegra_dc_rgb_ops;
