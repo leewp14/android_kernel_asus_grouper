@@ -152,7 +152,7 @@ static void save_push_v1(struct nvhost_hwctx *nctx, struct nvhost_cdma *cdma)
 			p->save_phys);
 }
 
-static void __init save_begin_v1(struct host1x_hwctx_handler *p, u32 *ptr)
+static void save_begin_v1(struct host1x_hwctx_handler *p, u32 *ptr)
 {
 	ptr[0] = nvhost_opcode_nonincr(AR3D_DW_MEMORY_OUTPUT_DATA,
 			RESTORE_BEGIN_SIZE);
@@ -160,7 +160,7 @@ static void __init save_begin_v1(struct host1x_hwctx_handler *p, u32 *ptr)
 	ptr += RESTORE_BEGIN_SIZE;
 }
 
-static void __init save_direct_v1(u32 *ptr, u32 start_reg, u32 count)
+static void save_direct_v1(u32 *ptr, u32 start_reg, u32 count)
 {
 	ptr[0] = nvhost_opcode_setclass(NV_GRAPHICS_3D_CLASS_ID,
 			AR3D_DW_MEMORY_OUTPUT_DATA, 1);
@@ -174,7 +174,7 @@ static void __init save_direct_v1(u32 *ptr, u32 start_reg, u32 count)
 	ptr[3] = nvhost_opcode_nonincr(NV_CLASS_HOST_INDDATA, count);
 }
 
-static void __init save_indirect_v1(u32 *ptr, u32 offset_reg, u32 offset,
+static void save_indirect_v1(u32 *ptr, u32 offset_reg, u32 offset,
 			u32 data_reg, u32 count)
 {
 	ptr[0] = nvhost_opcode_setclass(NV_GRAPHICS_3D_CLASS_ID, 0, 0);
@@ -191,7 +191,7 @@ static void __init save_indirect_v1(u32 *ptr, u32 offset_reg, u32 offset,
 	ptr[5] = nvhost_opcode_nonincr(NV_CLASS_HOST_INDDATA, count);
 }
 
-static void __init save_end_v1(struct host1x_hwctx_handler *p, u32 *ptr)
+static void save_end_v1(struct host1x_hwctx_handler *p, u32 *ptr)
 {
 	/* write end of restore buffer */
 	ptr[0] = nvhost_opcode_setclass(NV_GRAPHICS_3D_CLASS_ID,
@@ -225,7 +225,7 @@ static void __init save_end_v1(struct host1x_hwctx_handler *p, u32 *ptr)
 
 
 
-static void __init setup_save_regs(struct save_info *info,
+static void setup_save_regs(struct save_info *info,
 			const struct hwctx_reginfo *regs,
 			unsigned int nr_regs)
 {
@@ -283,7 +283,7 @@ static void __init setup_save_regs(struct save_info *info,
 	info->restore_count = restore_count;
 }
 
-static void __init switch_gpu(struct save_info *info,
+static void switch_gpu(struct save_info *info,
 			unsigned int save_src_set,
 			u32 save_dest_sets,
 			u32 restore_dest_sets)
@@ -304,7 +304,7 @@ static void __init switch_gpu(struct save_info *info,
 	info->restore_count += 1;
 }
 
-static void __init setup_save(struct host1x_hwctx_handler *p, u32 *ptr)
+static void setup_save(struct host1x_hwctx_handler *p, u32 *ptr)
 {
 	struct save_info info = {
 		ptr,
