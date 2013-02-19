@@ -1,4 +1,4 @@
-     CPU frequency and voltage scaling code in the Linux(TM) kernel
+\     CPU frequency and voltage scaling code in the Linux(TM) kernel
 
 
 		         L i n u x    C P U F r e q
@@ -29,6 +29,7 @@ Contents:
 2.4  Ondemand
 2.5  Conservative
 2.6  Interactive
+2.7  LionHeart
 
 3.   The Governor Interface in the CPUfreq Core
 
@@ -230,6 +231,16 @@ is 85.
 
 timer_rate: Sample rate for reevaluating cpu load when the system is
 not idle.  Default is 30000 uS.
+
+2.9 LionHeart
+---------------
+
+Lionheart is a conservative-based governor which is based on samsung's
+update3 source. The tunables (such as the thresholds and sampling rate)
+were changed so the governor behaves more like the performance one, at
+the cost of battery as the scaling is very aggressive. When it comes to
+smoothness (not considering battery drain), a tuned conservative delivers
+more as compared to a tuned ondemand.
 
 3. The Governor Interface in the CPUfreq Core
 =============================================
