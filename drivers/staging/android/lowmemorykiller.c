@@ -119,6 +119,9 @@ extern int compact_nodes();
 static atomic_t shift_adj = ATOMIC_INIT(0);
 static short adj_max_shift = 353;
 
+#define CACHED_APP_MIN_ADJ	9
+#define CACHED_APP_MIN_SCORE_ADJ	((CACHED_APP_MIN_ADJ * OOM_SCORE_ADJ_MAX) / -OOM_DISABLE)
+
 /* User knob to enable/disable adaptive lmk feature */
 static int enable_adaptive_lmk;
 module_param_named(enable_adaptive_lmk, enable_adaptive_lmk, int,
@@ -393,11 +396,17 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
                 if (tasksize <= 0)
                         continue;
                 if (selected) {
-                        if (oom_score_adj < selected_oom_score_adj)
-                                continue;
-                        if (oom_score_adj == selected_oom_score_adj &&
-                            tasksize <= selected_tasksize)
-                                continue;
+			if (oom_score_adj >= CACHED_APP_MIN_SCORE_ADJ) {
+				if (tasksize <= selected_tasksize)
+					continue;
+			}
+			else{
+				if (oom_score_adj < selected_oom_score_adj)
+					continue;
+				if (oom_score_adj == selected_oom_score_adj &&
+				    tasksize <= selected_tasksize)
+					continue;
+			}
                 }
                 selected = p;
                 selected_tasksize = tasksize;
