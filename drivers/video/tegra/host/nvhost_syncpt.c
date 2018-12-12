@@ -72,9 +72,9 @@ u32 nvhost_syncpt_update_min(struct nvhost_syncpt *sp, u32 id)
 {
 	u32 val;
 
-	BUG_ON(!syncpt_op(sp).update_min);
+	BUG_ON(!syncpt_op().update_min);
 
-	val = syncpt_op(sp).update_min(sp, id);
+	val = syncpt_op().update_min(sp, id);
 	trace_nvhost_syncpt_update_min(id, val);
 
 	return val;
@@ -138,7 +138,7 @@ static bool syncpt_update_min_is_expired(
 	u32 id,
 	u32 thresh)
 {
-	syncpt_op(sp).update_min(sp, id);
+	syncpt_op().update_min(sp, id);
 	return nvhost_syncpt_is_expired(sp, id, thresh);
 }
 
