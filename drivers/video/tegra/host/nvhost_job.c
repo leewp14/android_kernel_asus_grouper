@@ -45,10 +45,6 @@ static int job_size(struct nvhost_submit_hdr_ext *hdr)
 			+ num_unpins * sizeof(struct nvmap_handle_ref *)
 			+ num_waitchks * sizeof(struct nvhost_waitchk)
 			+ num_cmdbufs * sizeof(struct nvhost_job_gather);
-			if (!job->gather_mem)
-				err = -ENOMEM;
-			if (!job->gathers)
-				err = -ENOMEM;
 }
 
 static void init_fields(struct nvhost_job *job,
