@@ -679,6 +679,9 @@ static struct platform_device *grouper_gfx_devices[] __initdata = {
 	&grouper_nvmap_device,
 #endif
 	&tegra_pwfm0_device,
+};
+static struct platform_device *grouper_backlight_devices[] __initdata = {
+
 	&grouper_backlight_device,
 };
 
@@ -831,6 +834,10 @@ int __init grouper_panel_init(void)
 	if (!err)
 		err = nvhost_device_register(&grouper_disp2_device);
 #endif
+
+       err = platform_add_devices(grouper_backlight_devices,
+                                  ARRAY_SIZE(grouper_backlight_devices));
+
 
 #if defined(CONFIG_TEGRA_GRHOST) && defined(CONFIG_TEGRA_NVAVP)
 	if (!err)
