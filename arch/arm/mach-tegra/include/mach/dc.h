@@ -384,7 +384,6 @@ struct tegra_dc_out {
 	u8			*out_sel_configs;
 	unsigned		n_out_sel_configs;
 
-	int	(*prepoweroff)(void);
 	int	(*enable)(void);
 	int	(*postpoweron)(void);
 	int	(*prepoweroff)(void);
