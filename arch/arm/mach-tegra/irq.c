@@ -51,6 +51,8 @@
 #define ICTLR_COP_IER_CLR	0x38
 #define ICTLR_COP_IEP_CLASS	0x3c
 
+#define TEGRA_MAX_NUM_ICTLRS	6
+
 #define NUM_ICTLRS (INT_MAIN_NR/32)
 #define FIRST_LEGACY_IRQ 32
 
@@ -68,6 +70,8 @@ static void __iomem *ictlr_reg_base[] = {
 static u32 cop_ier[NUM_ICTLRS];
 static u32 cpu_ier[NUM_ICTLRS];
 static u32 cpu_iep[NUM_ICTLRS];
+
+static u32 ictlr_wake_mask[TEGRA_MAX_NUM_ICTLRS];
 #endif
 
 static inline void tegra_irq_write_mask(unsigned int irq, unsigned long reg)
