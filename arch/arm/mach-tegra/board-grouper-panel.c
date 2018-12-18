@@ -679,7 +679,10 @@ static struct platform_device *grouper_gfx_devices[] __initdata = {
 	&grouper_nvmap_device,
 #endif
 	&tegra_pwfm0_device,
-	&grouper_backlight_device,
+};
+
+static struct platform_device *grouper_bl_devices[]  = {
+        &grouper_backlight_device,
 };
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
@@ -798,11 +801,6 @@ int __init grouper_panel_init(void)
 	register_early_suspend(&grouper_panel_early_suspender);
 #endif
 
-#if defined(CONFIG_TEGRA_NVMAP)
-        grouper_carveouts[1].base = tegra_carveout_start;
-        grouper_carveouts[1].size = tegra_carveout_size;
-#endif
-
 #ifdef CONFIG_TEGRA_GRHOST
 	err = nvhost_device_register(&tegra_grhost_device);
 	if (err)
@@ -819,9 +817,9 @@ int __init grouper_panel_init(void)
 	res->end = tegra_fb_start + tegra_fb_size - 1;
 #endif
 
-//	/* Copy the bootloader fb to the fb. */
-//	tegra_move_framebuffer(tegra_fb_start, tegra_bootloader_fb_start,
-//				min(tegra_fb_size, tegra_bootloader_fb_size));
+	/* Copy the bootloader fb to the fb. */
+	tegra_move_framebuffer(tegra_fb_start, tegra_bootloader_fb_start,
+				min(tegra_fb_size, tegra_bootloader_fb_size));
 
 #if defined(CONFIG_TEGRA_GRHOST) && defined(CONFIG_TEGRA_DC)
 	if (!err)
@@ -841,5 +839,9 @@ int __init grouper_panel_init(void)
 	if (!err)
 		err = nvhost_device_register(&nvavp_device);
 #endif
+        if (!err)
+                err = platform_add_devices(grouper_bl_devices,
+                                ARRAY_SIZE(grouper_bl_devices));
+
 	return err;
 }
