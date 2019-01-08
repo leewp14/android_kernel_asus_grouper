@@ -619,6 +619,7 @@ static irqreturn_t smb347_inok_isr(int irq, void *dev_id)
 {
 	struct smb347_charger *smb = dev_id;
 
+	disable_irq_nosync(irq);
 	queue_delayed_work(smb347_wq, &smb->inok_isr_work, 0.6*HZ);
 
 	return IRQ_HANDLED;
@@ -628,6 +629,7 @@ static irqreturn_t smb347_dockin_isr(int irq, void *dev_id)
 {
 	struct smb347_charger *smb = dev_id;
 
+	disable_irq_nosync(irq);
 	queue_delayed_work(smb347_wq, &smb->dockin_isr_work, 0*HZ);
 
 	return IRQ_HANDLED;
@@ -653,7 +655,7 @@ static int smb347_inok_irq(struct smb347_charger *smb)
 		goto err2;
 	}
 
-	err = request_irq(irq_num, smb347_inok_isr, IRQF_TRIGGER_FALLING |IRQF_TRIGGER_RISING,
+	err = request_irq(irq_num, smb347_inok_isr, IRQF_TRIGGER_FALLING |IRQF_TRIGGER_RISING | IRQF_ONESHOT,
 		"smb347_inok", smb);
 	if (err < 0) {
 		printk("%s irq %d request failed \n","smb347_inok", irq_num);
@@ -661,6 +663,8 @@ static int smb347_inok_irq(struct smb347_charger *smb)
 	}
 	printk("GPIO pin irq %d requested ok, smb347_INOK = %s\n", irq_num, gpio_get_value(gpio)? "H":"L");
 
+	disable_irq(irq_num);
+	queue_delayed_work(smb347_wq, &charger->inok_isr_work, 0.5*HZ);
 	return 0 ;
 
 err2:
@@ -691,14 +695,13 @@ static int smb347_dockin_irq(struct smb347_charger *smb)
 		goto err2;
 	}
 
-	err = request_irq(irq_num, smb347_dockin_isr, IRQF_SHARED|IRQF_TRIGGER_FALLING |IRQF_TRIGGER_RISING,
+	err = request_irq(irq_num, smb347_dockin_isr, IRQF_SHARED|IRQF_TRIGGER_FALLING|IRQF_TRIGGER_RISING|IRQF_ONESHOT,
 		"smb347_dockin", smb);
 	if (err < 0) {
 		printk("%s irq %d request failed \n","smb347_dockin", irq_num);
 		goto err2 ;
 	}
 
-	enable_irq_wake(irq_num);
 	printk("GPIO pin irq %d requested ok, smb347_DOCK_IN# = %s\n", irq_num, gpio_get_value(gpio)? "H":"L");
 
 	return 0;
@@ -1584,7 +1587,7 @@ static int __devinit smb347_probe(struct i2c_client *client,
 	struct i2c_adapter *adapter = to_i2c_adapter(client->dev.parent);
 	int ret;
 	//int irq_num;
-	//uint8_t buf[15];
+	//uint8_t val, buf[15];
 
 	if (!i2c_check_functionality(adapter, I2C_FUNC_SMBUS_BYTE))
 		return -EIO;
@@ -1643,7 +1646,9 @@ static int __devinit smb347_probe(struct i2c_client *client,
 		goto error;
 	}
 
-	queue_delayed_work(smb347_wq, &charger->cable_det_work, 0.5*HZ);
+	//queue_delayed_work(smb347_wq, &charger->cable_det_work, 0.5*HZ);
+	cable_type_detect();
+
 	ret = register_otg_callback(smb347_otg_status, charger);
 	if (ret < 0)
 		goto error;

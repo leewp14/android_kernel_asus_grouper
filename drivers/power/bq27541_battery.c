@@ -273,7 +273,7 @@ static struct bq27541_device_info {
 	unsigned int old_temperature;
 	unsigned int temp_err;
 	unsigned int prj_id;
-	stuct mutex lock;
+	struct mutex lock;
 } *bq27541_device;
 
 static int bq27541_read_i2c(u8 reg, int *rt_value, int b_single)
@@ -893,7 +893,6 @@ static int bq27541_probe(struct i2c_client *client,
 	INIT_DELAYED_WORK(&bq27541_device->shutdown_en_work, shutdown_enable_set);
 	cancel_delayed_work(&bq27541_device->status_poll_work);
 
-	ddspin_lock_init(&bq27541_device->lock);
 	wake_lock_init(&bq27541_device->low_battery_wake_lock, WAKE_LOCK_SUSPEND, "low_battery_detection");
 	wake_lock_init(&bq27541_device->cable_wake_lock, WAKE_LOCK_SUSPEND, "cable_state_changed");
 
