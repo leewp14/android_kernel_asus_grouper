@@ -140,6 +140,7 @@ struct tegra_dsi_out {
 	u8		chip_rev;
 
 	bool		panel_has_frame_buffer;	/* required*/
+	bool		panel_send_dc_frames;
 
 	struct tegra_dsi_cmd	*dsi_init_cmd;		/* required */
 	u16		n_init_cmd;			/* required */
@@ -383,9 +384,9 @@ struct tegra_dc_out {
 	u8			*out_sel_configs;
 	unsigned		n_out_sel_configs;
 
-	int	(*prepoweroff)(void);
 	int	(*enable)(void);
 	int	(*postpoweron)(void);
+	int	(*prepoweroff)(void);
 	int	(*disable)(void);
 
 	int	(*hotplug_init)(void);
@@ -454,6 +455,7 @@ struct tegra_dc_win {
 	unsigned		out_w;
 	unsigned		out_h;
 	unsigned		z;
+	u8			global_alpha;
 
 	struct tegra_dc_csc	csc;
 
@@ -534,6 +536,7 @@ struct tegra_dc_platform_data {
 
 #define TEGRA_DC_FLAG_ENABLED		(1 << 0)
 
+int tegra_dc_get_stride(struct tegra_dc *dc, unsigned win);
 struct tegra_dc *tegra_dc_get_dc(unsigned idx);
 struct tegra_dc_win *tegra_dc_get_window(struct tegra_dc *dc, unsigned win);
 bool tegra_dc_get_connected(struct tegra_dc *);

@@ -25,11 +25,14 @@
 #include "host1x/host1x_syncpt.h"
 #include "host1x/host1x_hwctx.h"
 #include "t20/t20.h"
+#include "chip_support.h"
+#include "nvhost_memmgr.h"
 
 #include <linux/slab.h>
 #include <linux/resource.h>
 
 #include <mach/iomap.h>
+#include <mach/hardware.h>
 
 #include "bus_client.h"
 
@@ -213,7 +216,7 @@ struct save_info {
 	unsigned int restore_count;
 };
 
-static void __init save_begin(struct host1x_hwctx_handler *h, u32 *ptr)
+static void save_begin(struct host1x_hwctx_handler *h, u32 *ptr)
 {
 	/* MPE: when done, increment syncpt to base+1 */
 	ptr[0] = nvhost_opcode_setclass(NV_VIDEO_ENCODE_MPEG_CLASS_ID, 0, 0);
@@ -227,7 +230,7 @@ static void __init save_begin(struct host1x_hwctx_handler *h, u32 *ptr)
 }
 #define SAVE_BEGIN_SIZE 5
 
-static void __init save_direct(u32 *ptr, u32 start_reg, u32 count)
+static void save_direct(u32 *ptr, u32 start_reg, u32 count)
 {
 	ptr[0] = nvhost_opcode_setclass(NV_HOST1X_CLASS_ID,
 					NV_CLASS_HOST_INDOFF, 1);
@@ -237,7 +240,7 @@ static void __init save_direct(u32 *ptr, u32 start_reg, u32 count)
 }
 #define SAVE_DIRECT_SIZE 3
 
-static void __init save_set_ram_cmd(u32 *ptr, u32 cmd_reg, u32 count)
+static void save_set_ram_cmd(u32 *ptr, u32 cmd_reg, u32 count)
 {
 	ptr[0] = nvhost_opcode_setclass(NV_VIDEO_ENCODE_MPEG_CLASS_ID,
 					cmd_reg, 1);
@@ -245,7 +248,7 @@ static void __init save_set_ram_cmd(u32 *ptr, u32 cmd_reg, u32 count)
 }
 #define SAVE_SET_RAM_CMD_SIZE 2
 
-static void __init save_read_ram_data_nasty(u32 *ptr, u32 data_reg)
+static void save_read_ram_data_nasty(u32 *ptr, u32 data_reg)
 {
 	ptr[0] = nvhost_opcode_setclass(NV_HOST1X_CLASS_ID,
 					NV_CLASS_HOST_INDOFF, 1);
@@ -259,7 +262,7 @@ static void __init save_read_ram_data_nasty(u32 *ptr, u32 data_reg)
 }
 #define SAVE_READ_RAM_DATA_NASTY_SIZE 5
 
-static void __init save_end(struct host1x_hwctx_handler *h, u32 *ptr)
+static void save_end(struct host1x_hwctx_handler *h, u32 *ptr)
 {
 	/* Wait for context read service to finish (cpu incr 3) */
 	ptr[0] = nvhost_opcode_setclass(NV_HOST1X_CLASS_ID,
@@ -273,7 +276,7 @@ static void __init save_end(struct host1x_hwctx_handler *h, u32 *ptr)
 }
 #define SAVE_END_SIZE 5
 
-static void __init setup_save_regs(struct save_info *info,
+static void setup_save_regs(struct save_info *info,
 			const struct hwctx_reginfo *regs,
 			unsigned int nr_regs)
 {
@@ -302,7 +305,7 @@ static void __init setup_save_regs(struct save_info *info,
 	info->restore_count = restore_count;
 }
 
-static void __init setup_save_ram_nasty(struct save_info *info,	unsigned words,
+static void setup_save_ram_nasty(struct save_info *info,	unsigned words,
 					unsigned cmd_reg, unsigned data_reg)
 {
 	u32 *ptr = info->ptr;
@@ -328,7 +331,7 @@ static void __init setup_save_ram_nasty(struct save_info *info,	unsigned words,
 	info->restore_count = restore_count;
 }
 
-static void __init setup_save(struct host1x_hwctx_handler *h, u32 *ptr)
+static void setup_save(struct host1x_hwctx_handler *h, u32 *ptr)
 {
 	struct save_info info = {
 		ptr,
@@ -432,23 +435,23 @@ static u32 *save_ram(u32 *ptr, unsigned int *pending,
 static struct nvhost_hwctx *ctxmpe_alloc(struct nvhost_hwctx_handler *h,
 		struct nvhost_channel *ch)
 {
-	struct nvmap_client *nvmap = nvhost_get_host(ch->dev)->nvmap;
+	struct mem_mgr *memmgr = nvhost_get_host(ch->dev)->memmgr;
 	struct host1x_hwctx_handler *p = to_host1x_hwctx_handler(h);
 	struct host1x_hwctx *ctx;
 
 	ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
 	if (!ctx)
 		return NULL;
-	ctx->restore = nvmap_alloc(nvmap, restore_size * 4, 32,
-				NVMAP_HANDLE_WRITE_COMBINE, 0);
+	ctx->restore = mem_op().alloc(memmgr, restore_size * 4, 32,
+				mem_mgr_flag_write_combine);
 	if (IS_ERR_OR_NULL(ctx->restore)) {
 		kfree(ctx);
 		return NULL;
 	}
 
-	ctx->restore_virt = nvmap_mmap(ctx->restore);
+	ctx->restore_virt = mem_op().mmap(ctx->restore);
 	if (!ctx->restore_virt) {
-		nvmap_free(nvmap, ctx->restore);
+		mem_op().put(memmgr, ctx->restore);
 		kfree(ctx);
 		return NULL;
 	}
@@ -459,7 +462,8 @@ static struct nvhost_hwctx *ctxmpe_alloc(struct nvhost_hwctx_handler *h,
 	ctx->hwctx.valid = false;
 	ctx->save_incrs = 3;
 	ctx->save_thresh = 2;
-	ctx->restore_phys = nvmap_pin(nvmap, ctx->restore);
+	ctx->save_slots = p->save_slots;
+	ctx->restore_phys = mem_op().pin(memmgr, ctx->restore);
 	ctx->restore_size = restore_size;
 	ctx->restore_incrs = 1;
 
@@ -477,13 +481,12 @@ static void ctxmpe_free(struct kref *ref)
 {
 	struct nvhost_hwctx *nctx = container_of(ref, struct nvhost_hwctx, ref);
 	struct host1x_hwctx *ctx = to_host1x_hwctx(nctx);
-	struct nvmap_client *nvmap =
-		nvhost_get_host(nctx->channel->dev)->nvmap;
+	struct mem_mgr *memmgr = nvhost_get_host(nctx->channel->dev)->memmgr;
 
 	if (ctx->restore_virt)
-		nvmap_munmap(ctx->restore, ctx->restore_virt);
-	nvmap_unpin(nvmap, ctx->restore);
-	nvmap_free(nvmap, ctx->restore);
+		mem_op().munmap(ctx->restore, ctx->restore_virt);
+	mem_op().unpin(memmgr, ctx->restore);
+	mem_op().put(memmgr, ctx->restore);
 	kfree(ctx);
 }
 
@@ -497,7 +500,10 @@ static void ctxmpe_save_push(struct nvhost_hwctx *nctx,
 {
 	struct host1x_hwctx *ctx = to_host1x_hwctx(nctx);
 	struct host1x_hwctx_handler *h = host1x_hwctx_handler(ctx);
-	nvhost_cdma_push(cdma,
+	nvhost_cdma_push_gather(cdma,
+			nvhost_get_host(nctx->channel->dev)->memmgr,
+			h->save_buf,
+			0,
 			nvhost_opcode_gather(h->save_size),
 			h->save_phys);
 }
@@ -528,11 +534,10 @@ static void ctxmpe_save_service(struct nvhost_hwctx *nctx)
 			h->syncpt);
 }
 
-struct nvhost_hwctx_handler *nvhost_mpe_ctxhandler_init(
-		u32 syncpt, u32 waitbase,
-		struct nvhost_channel *ch)
+struct nvhost_hwctx_handler *nvhost_mpe_ctxhandler_init(u32 syncpt,
+	u32 waitbase, struct nvhost_channel *ch)
 {
-	struct nvmap_client *nvmap;
+	struct mem_mgr *memmgr;
 	u32 *save_ptr;
 	struct host1x_hwctx_handler *p;
 
@@ -540,28 +545,29 @@ struct nvhost_hwctx_handler *nvhost_mpe_ctxhandler_init(
 	if (!p)
 		return NULL;
 
-	nvmap = nvhost_get_host(ch->dev)->nvmap;
+	memmgr = nvhost_get_host(ch->dev)->memmgr;
 
 	p->syncpt = syncpt;
 	p->waitbase = waitbase;
 
 	setup_save(p, NULL);
 
-	p->save_buf = nvmap_alloc(nvmap, p->save_size * 4, 32,
-				NVMAP_HANDLE_WRITE_COMBINE, 0);
-	if (IS_ERR(p->save_buf)) {
+	p->save_buf = mem_op().alloc(memmgr, p->save_size * 4, 32,
+				mem_mgr_flag_write_combine);
+	if (IS_ERR_OR_NULL(p->save_buf)) {
 		p->save_buf = NULL;
 		return NULL;
 	}
 
-	save_ptr = nvmap_mmap(p->save_buf);
+	save_ptr = mem_op().mmap(p->save_buf);
 	if (!save_ptr) {
-		nvmap_free(nvmap, p->save_buf);
+		mem_op().put(memmgr, p->save_buf);
 		p->save_buf = NULL;
 		return NULL;
 	}
 
-	p->save_phys = nvmap_pin(nvmap, p->save_buf);
+	p->save_phys = mem_op().pin(memmgr, p->save_buf);
+	p->save_slots = 1;
 
 	setup_save(p, save_ptr);
 
@@ -579,9 +585,51 @@ int nvhost_mpe_prepare_power_off(struct nvhost_device *dev)
 	return host1x_save_context(dev, NVSYNCPT_MPE);
 }
 
-static int __devinit mpe_probe(struct nvhost_device *dev)
+enum mpe_ip_ver {
+	mpe_01,
+	mpe_02,
+};
+
+struct mpe_desc {
+	int (*prepare_poweroff)(struct nvhost_device *dev);
+	struct nvhost_hwctx_handler *(*alloc_hwctx_handler)(u32 syncpt,
+			u32 waitbase, struct nvhost_channel *ch);
+};
+
+static const struct mpe_desc mpe[] = {
+	[mpe_01] = {
+		.prepare_poweroff = nvhost_mpe_prepare_power_off,
+		.alloc_hwctx_handler = nvhost_mpe_ctxhandler_init,
+	},
+	[mpe_02] = {
+		.prepare_poweroff = nvhost_mpe_prepare_power_off,
+		.alloc_hwctx_handler = nvhost_mpe_ctxhandler_init,
+	},
+};
+
+static struct nvhost_device_id mpe_id[] = {
+	{ "mpe01", mpe_01 },
+	{ "mpe02", mpe_02 },
+	{ },
+};
+
+MODULE_DEVICE_TABLE(nvhost, mpe_id);
+
+static int __devinit mpe_probe(struct nvhost_device *dev,
+	struct nvhost_device_id *id_table)
 {
 	int err = 0;
+	int index = 0;
+	struct nvhost_driver *drv = to_nvhost_driver(dev->dev.driver);
+
+	index = id_table->driver_data;
+
+	drv->prepare_poweroff		= mpe[index].prepare_poweroff;
+	drv->alloc_hwctx_handler	= mpe[index].alloc_hwctx_handler;
+
+	/* reset device name so that consistent device name can be
+	 * found in clock tree */
+	dev->name = "mpe";
 
 	err = nvhost_client_device_get_resources(dev);
 	if (err)
@@ -596,6 +644,7 @@ static int __exit mpe_remove(struct nvhost_device *dev)
 	return 0;
 }
 
+#ifdef CONFIG_PM
 static int mpe_suspend(struct nvhost_device *dev, pm_message_t state)
 {
 	return nvhost_client_device_suspend(dev);
@@ -606,6 +655,7 @@ static int mpe_resume(struct nvhost_device *dev)
 	dev_info(&dev->dev, "resuming\n");
 	return 0;
 }
+#endif
 
 static struct resource mpe_resources = {
 	.name = "regs",
@@ -626,7 +676,8 @@ static struct nvhost_driver mpe_driver = {
 	.driver = {
 		.owner = THIS_MODULE,
 		.name = "mpe",
-	}
+	},
+	.id_table = mpe_id,
 };
 
 static int __init mpe_init(void)

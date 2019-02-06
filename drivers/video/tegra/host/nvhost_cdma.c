@@ -20,6 +20,9 @@
 
 #include "nvhost_cdma.h"
 #include "dev.h"
+#include "debug.h"
+#include "nvhost_memmgr.h"
+#include "chip_support.h"
 #include <asm/cacheflush.h>
 
 #include <linux/slab.h>
@@ -49,6 +52,18 @@ static void add_to_sync_queue(struct nvhost_cdma *cdma,
 	job->num_slots = nr_slots;
 	nvhost_job_get(job);
 	list_add_tail(&job->list, &cdma->sync_queue);
+
+	switch (job->priority) {
+	case NVHOST_PRIORITY_HIGH:
+		cdma->high_prio_count++;
+		break;
+	case NVHOST_PRIORITY_MEDIUM:
+		cdma->med_prio_count++;
+		break;
+	case NVHOST_PRIORITY_LOW:
+		cdma->low_prio_count++;
+		break;
+	}
 }
 
 /**
@@ -65,8 +80,8 @@ static unsigned int cdma_status_locked(struct nvhost_cdma *cdma,
 		return list_empty(&cdma->sync_queue) ? 1 : 0;
 	case CDMA_EVENT_PUSH_BUFFER_SPACE: {
 		struct push_buffer *pb = &cdma->push_buffer;
-		BUG_ON(!cdma_pb_op(cdma).space);
-		return cdma_pb_op(cdma).space(pb);
+		BUG_ON(!cdma_pb_op().space);
+		return cdma_pb_op().space(pb);
 	}
 	default:
 		return 0;
@@ -92,7 +107,13 @@ unsigned int nvhost_cdma_wait_locked(struct nvhost_cdma *cdma,
 		trace_nvhost_wait_cdma(cdma_to_channel(cdma)->dev->name,
 				event);
 
-		BUG_ON(cdma->event != CDMA_EVENT_NONE);
+		/* If somebody has managed to already start waiting, yield */
+		if (cdma->event != CDMA_EVENT_NONE) {
+			mutex_unlock(&cdma->lock);
+			schedule();
+			mutex_lock(&cdma->lock);
+			continue;
+		}
 		cdma->event = event;
 
 		mutex_unlock(&cdma->lock);
@@ -181,13 +202,26 @@ static void update_cdma_locked(struct nvhost_cdma *cdma)
 		/* Pop push buffer slots */
 		if (job->num_slots) {
 			struct push_buffer *pb = &cdma->push_buffer;
-			BUG_ON(!cdma_pb_op(cdma).pop_from);
-			cdma_pb_op(cdma).pop_from(pb, job->num_slots);
+			BUG_ON(!cdma_pb_op().pop_from);
+			cdma_pb_op().pop_from(pb, job->num_slots);
 			if (cdma->event == CDMA_EVENT_PUSH_BUFFER_SPACE)
 				signal = true;
 		}
 
 		list_del(&job->list);
+
+		switch (job->priority) {
+		case NVHOST_PRIORITY_HIGH:
+			cdma->high_prio_count--;
+			break;
+		case NVHOST_PRIORITY_MEDIUM:
+			cdma->med_prio_count--;
+			break;
+		case NVHOST_PRIORITY_LOW:
+			cdma->low_prio_count--;
+			break;
+		}
+
 		nvhost_job_put(job);
 	}
 
@@ -207,7 +241,6 @@ void nvhost_cdma_update_sync_queue(struct nvhost_cdma *cdma,
 {
 	u32 get_restart;
 	u32 syncpt_incrs;
-	bool exec_ctxsave;
 	struct nvhost_job *job = NULL;
 	u32 syncpt_val;
 
@@ -274,7 +307,7 @@ void nvhost_cdma_update_sync_queue(struct nvhost_cdma *cdma,
 		nvhost_job_dump(dev, job);
 
 		/* safe to use CPU to incr syncpts */
-		cdma_op(cdma).timeout_cpu_incr(cdma,
+		cdma_op().timeout_cpu_incr(cdma,
 				job->first_get,
 				syncpt_incrs,
 				job->syncpt_end,
@@ -284,45 +317,10 @@ void nvhost_cdma_update_sync_queue(struct nvhost_cdma *cdma,
 	}
 
 	dev_dbg(dev,
-		"%s: GPU incr blocked interleaved ctx buffers\n",
-		__func__);
-
-	exec_ctxsave = false;
-
-	/* setup GPU increments */
-	list_for_each_entry_from(job, &cdma->sync_queue, list) {
-		/* same context, increment in the pushbuffer */
-		if (job->clientid == cdma->timeout.clientid) {
-			/* won't need a timeout when replayed */
-			job->timeout = 0;
-
-			/* update buffer's syncpts in the pushbuffer */
-			cdma_op(cdma).timeout_pb_incr(cdma,
-					job->first_get,
-					job->syncpt_incrs,
-					job->num_slots,
-					exec_ctxsave);
-
-			exec_ctxsave = false;
-		} else {
-			dev_dbg(dev,
-				"%s: switch to a different userctx\n",
-				__func__);
-			/*
-			 * If previous context was the timed out context
-			 * then clear its CTXSAVE in this slot.
-			 */
-			exec_ctxsave = true;
-		}
-
-		nvhost_job_dump(dev, job);
-	}
-
-	dev_dbg(dev,
 		"%s: finished sync_queue modification\n", __func__);
 
 	/* roll back DMAGET and start up channel again */
-	cdma_op(cdma).timeout_teardown_end(cdma, get_restart);
+	cdma_op().timeout_teardown_end(cdma, get_restart);
 
 	if (cdma->timeout.ctx)
 		cdma->timeout.ctx->has_timedout = true;
@@ -335,7 +333,7 @@ int nvhost_cdma_init(struct nvhost_cdma *cdma)
 {
 	int err;
 	struct push_buffer *pb = &cdma->push_buffer;
-	BUG_ON(!cdma_pb_op(cdma).init);
+	BUG_ON(!cdma_pb_op().init);
 	mutex_init(&cdma->lock);
 	sema_init(&cdma->sem, 0);
 
@@ -345,7 +343,7 @@ int nvhost_cdma_init(struct nvhost_cdma *cdma)
 	cdma->running = false;
 	cdma->torndown = false;
 
-	err = cdma_pb_op(cdma).init(pb);
+	err = cdma_pb_op().init(pb);
 	if (err)
 		return err;
 	return 0;
@@ -358,10 +356,10 @@ void nvhost_cdma_deinit(struct nvhost_cdma *cdma)
 {
 	struct push_buffer *pb = &cdma->push_buffer;
 
-	BUG_ON(!cdma_pb_op(cdma).destroy);
+	BUG_ON(!cdma_pb_op().destroy);
 	BUG_ON(cdma->running);
-	cdma_pb_op(cdma).destroy(pb);
-	cdma_op(cdma).timeout_destroy(cdma);
+	cdma_pb_op().destroy(pb);
+	cdma_op().timeout_destroy(cdma);
 }
 
 /**
@@ -375,8 +373,8 @@ int nvhost_cdma_begin(struct nvhost_cdma *cdma, struct nvhost_job *job)
 		/* init state on first submit with timeout value */
 		if (!cdma->timeout.initialized) {
 			int err;
-			BUG_ON(!cdma_op(cdma).timeout_init);
-			err = cdma_op(cdma).timeout_init(cdma,
+			BUG_ON(!cdma_op().timeout_init);
+			err = cdma_op().timeout_init(cdma,
 				job->syncpt_id);
 			if (err) {
 				mutex_unlock(&cdma->lock);
@@ -385,13 +383,43 @@ int nvhost_cdma_begin(struct nvhost_cdma *cdma, struct nvhost_job *job)
 		}
 	}
 	if (!cdma->running) {
-		BUG_ON(!cdma_op(cdma).start);
-		cdma_op(cdma).start(cdma);
+		BUG_ON(!cdma_op().start);
+		cdma_op().start(cdma);
 	}
 	cdma->slots_free = 0;
 	cdma->slots_used = 0;
-	cdma->first_get = cdma_pb_op(cdma).putptr(&cdma->push_buffer);
+	cdma->first_get = cdma_pb_op().putptr(&cdma->push_buffer);
 	return 0;
+}
+
+static void trace_write_gather(struct nvhost_cdma *cdma,
+		struct mem_handle *ref,
+		u32 offset, u32 words)
+{
+	void *mem = NULL;
+
+	if (nvhost_debug_trace_cmdbuf) {
+		mem = mem_op().mmap(ref);
+		if (IS_ERR_OR_NULL(mem))
+			mem = NULL;
+	};
+
+	if (mem) {
+		u32 i;
+		/*
+		 * Write in batches of 128 as there seems to be a limit
+		 * of how much you can output to ftrace at once.
+		 */
+		for (i = 0; i < words; i += TRACE_MAX_LENGTH) {
+			trace_nvhost_cdma_push_gather(
+				cdma_to_channel(cdma)->dev->name,
+				(u32)ref,
+				min(words - i, TRACE_MAX_LENGTH),
+				offset + i * sizeof(u32),
+				mem);
+		}
+		mem_op().munmap(ref, mem);
+	}
 }
 
 /**
@@ -400,7 +428,11 @@ int nvhost_cdma_begin(struct nvhost_cdma *cdma, struct nvhost_job *job)
  */
 void nvhost_cdma_push(struct nvhost_cdma *cdma, u32 op1, u32 op2)
 {
-	nvhost_cdma_push_gather(cdma, NULL, NULL, op1, op2);
+	if (nvhost_debug_trace_cmdbuf)
+		trace_nvhost_cdma_push(cdma_to_channel(cdma)->dev->name,
+				op1, op2);
+
+	nvhost_cdma_push_gather(cdma, NULL, NULL, 0, op1, op2);
 }
 
 /**
@@ -408,21 +440,26 @@ void nvhost_cdma_push(struct nvhost_cdma *cdma, u32 op1, u32 op2)
  * Blocks as necessary if the push buffer is full.
  */
 void nvhost_cdma_push_gather(struct nvhost_cdma *cdma,
-		struct nvmap_client *client,
-		struct nvmap_handle *handle, u32 op1, u32 op2)
+		struct mem_mgr *client, struct mem_handle *handle,
+		u32 offset, u32 op1, u32 op2)
 {
 	u32 slots_free = cdma->slots_free;
 	struct push_buffer *pb = &cdma->push_buffer;
-	BUG_ON(!cdma_pb_op(cdma).push_to);
-	BUG_ON(!cdma_op(cdma).kick);
+
+	BUG_ON(!cdma_pb_op().push_to);
+	BUG_ON(!cdma_op().kick);
+
+	if (handle)
+		trace_write_gather(cdma, handle, offset, op1 & 0xffff);
+
 	if (slots_free == 0) {
-		cdma_op(cdma).kick(cdma);
+		cdma_op().kick(cdma);
 		slots_free = nvhost_cdma_wait_locked(cdma,
 				CDMA_EVENT_PUSH_BUFFER_SPACE);
 	}
 	cdma->slots_free = slots_free - 1;
 	cdma->slots_used++;
-	cdma_pb_op(cdma).push_to(pb, client, handle, op1, op2);
+	cdma_pb_op().push_to(pb, client, handle, op1, op2);
 }
 
 /**
@@ -436,8 +473,8 @@ void nvhost_cdma_end(struct nvhost_cdma *cdma,
 {
 	bool was_idle = list_empty(&cdma->sync_queue);
 
-	BUG_ON(!cdma_op(cdma).kick);
-	cdma_op(cdma).kick(cdma);
+	BUG_ON(!cdma_op().kick);
+	cdma_op().kick(cdma);
 
 	BUG_ON(job->syncpt_id == NVSYNCPT_INVALID);
 
@@ -449,6 +486,12 @@ void nvhost_cdma_end(struct nvhost_cdma *cdma,
 	/* start timer on idle -> active transitions */
 	if (job->timeout && was_idle)
 		cdma_start_timer_locked(cdma, job);
+
+	trace_nvhost_cdma_end(job->ch->dev->name,
+			job->priority,
+			job->ch->cdma.high_prio_count,
+			job->ch->cdma.med_prio_count,
+			job->ch->cdma.low_prio_count);
 
 	mutex_unlock(&cdma->lock);
 }
@@ -473,6 +516,8 @@ int nvhost_cdma_flush(struct nvhost_cdma *cdma, int timeout)
 {
 	unsigned int space, err = 0;
 	unsigned long end_jiffies = jiffies + msecs_to_jiffies(timeout);
+
+	trace_nvhost_cdma_flush(cdma_to_channel(cdma)->dev->name, timeout);
 
 	/*
 	 * Wait for at most timeout ms. Recalculate timeout at each iteration

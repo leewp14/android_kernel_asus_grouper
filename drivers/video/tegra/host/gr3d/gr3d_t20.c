@@ -24,6 +24,8 @@
 #include "host1x/host1x_hardware.h"
 #include "host1x/host1x_syncpt.h"
 #include "gr3d.h"
+#include "chip_support.h"
+#include "nvhost_memmgr.h"
 
 #include <linux/slab.h>
 
@@ -136,13 +138,14 @@ static void save_push_v0(struct nvhost_hwctx *nctx, struct nvhost_cdma *cdma)
 	struct host1x_hwctx_handler *p = host1x_hwctx_handler(ctx);
 
 	nvhost_cdma_push_gather(cdma,
-			(void *)NVHOST_CDMA_PUSH_GATHER_CTXSAVE,
-			(void *)NVHOST_CDMA_PUSH_GATHER_CTXSAVE,
+			nvhost_get_host(nctx->channel->dev)->memmgr,
+			p->save_buf,
+			0,
 			nvhost_opcode_gather(p->save_size),
 			p->save_phys);
 }
 
-static void __init save_begin_v0(struct host1x_hwctx_handler *h, u32 *ptr)
+static void save_begin_v0(struct host1x_hwctx_handler *h, u32 *ptr)
 {
 	/* 3d: when done, increment syncpt to base+1 */
 	ptr[0] = nvhost_opcode_setclass(NV_GRAPHICS_3D_CLASS_ID, 0, 0);
@@ -158,7 +161,7 @@ static void __init save_begin_v0(struct host1x_hwctx_handler *h, u32 *ptr)
 			h->syncpt); /* incr 2 */
 }
 
-static void __init save_direct_v0(u32 *ptr, u32 start_reg, u32 count)
+static void save_direct_v0(u32 *ptr, u32 start_reg, u32 count)
 {
 	ptr[0] = nvhost_opcode_nonincr(NV_CLASS_HOST_INDOFF, 1);
 	ptr[1] = nvhost_class_host_indoff_reg_read(NV_HOST_MODULE_GR3D,
@@ -166,7 +169,7 @@ static void __init save_direct_v0(u32 *ptr, u32 start_reg, u32 count)
 	ptr[2] = nvhost_opcode_nonincr(NV_CLASS_HOST_INDDATA, count);
 }
 
-static void __init save_indirect_v0(u32 *ptr, u32 offset_reg, u32 offset,
+static void save_indirect_v0(u32 *ptr, u32 offset_reg, u32 offset,
 			u32 data_reg, u32 count)
 {
 	ptr[0] = nvhost_opcode_setclass(NV_GRAPHICS_3D_CLASS_ID,
@@ -179,7 +182,7 @@ static void __init save_indirect_v0(u32 *ptr, u32 offset_reg, u32 offset,
 	ptr[4] = nvhost_opcode_nonincr(NV_CLASS_HOST_INDDATA, count);
 }
 
-static void __init save_end_v0(struct host1x_hwctx_handler *h, u32 *ptr)
+static void save_end_v0(struct host1x_hwctx_handler *h, u32 *ptr)
 {
 	/* Wait for context read service to finish (cpu incr 3) */
 	ptr[0] = nvhost_opcode_nonincr(NV_CLASS_HOST_WAIT_SYNCPT_BASE, 1);
@@ -222,7 +225,7 @@ static u32 *save_regs_v0(u32 *ptr, unsigned int *pending,
 
 /*** save ***/
 
-static void __init setup_save_regs(struct save_info *info,
+static void setup_save_regs(struct save_info *info,
 			const struct hwctx_reginfo *regs,
 			unsigned int nr_regs)
 {
@@ -280,7 +283,7 @@ static void __init setup_save_regs(struct save_info *info,
 	info->restore_count = restore_count;
 }
 
-static void __init setup_save(struct host1x_hwctx_handler *h, u32 *ptr)
+static void setup_save(struct host1x_hwctx_handler *h, u32 *ptr)
 {
 	struct save_info info = {
 		ptr,
@@ -351,37 +354,37 @@ struct nvhost_hwctx_handler *nvhost_gr3d_t20_ctxhandler_init(
 		u32 syncpt, u32 waitbase,
 		struct nvhost_channel *ch)
 {
-	struct nvmap_client *nvmap;
+	struct mem_mgr *memmgr;
 	u32 *save_ptr;
 	struct host1x_hwctx_handler *p;
 
 	p = kmalloc(sizeof(*p), GFP_KERNEL);
 	if (!p)
 		return NULL;
-	nvmap = nvhost_get_host(ch->dev)->nvmap;
+	memmgr = nvhost_get_host(ch->dev)->memmgr;
 
 	p->syncpt = syncpt;
 	p->waitbase = waitbase;
 
 	setup_save(p, NULL);
 
-	p->save_buf = nvmap_alloc(nvmap, p->save_size * sizeof(u32), 32,
-				NVMAP_HANDLE_WRITE_COMBINE, 0);
-	if (IS_ERR(p->save_buf)) {
+	p->save_buf = mem_op().alloc(memmgr, p->save_size * sizeof(u32), 32,
+				mem_mgr_flag_write_combine);
+	if (IS_ERR_OR_NULL(p->save_buf)) {
 		p->save_buf = NULL;
 		return NULL;
 	}
 
 	p->save_slots = 1;
 
-	save_ptr = nvmap_mmap(p->save_buf);
+	save_ptr = mem_op().mmap(p->save_buf);
 	if (!save_ptr) {
-		nvmap_free(nvmap, p->save_buf);
+		mem_op().put(memmgr, p->save_buf);
 		p->save_buf = NULL;
 		return NULL;
 	}
 
-	p->save_phys = nvmap_pin(nvmap, p->save_buf);
+	p->save_phys = mem_op().pin(memmgr, p->save_buf);
 
 	setup_save(p, save_ptr);
 

@@ -40,9 +40,8 @@
 #include <mach/io.h>
 #include <mach/iomap.h>
 #include <mach/legacy_irq.h>
-#include <mach/nvmap.h>
+#include <linux/nvmap.h>
 
-#include "../../../../video/tegra/nvmap/nvmap.h"
 #include "../../../../video/tegra/host/host1x/host1x_syncpt.h"
 #include "../../../../video/tegra/host/dev.h"
 #include "../../../../video/tegra/host/nvhost_acm.h"
@@ -206,8 +205,6 @@ static int nvavp_service(struct nvavp_info *nvavp)
 	if (!(inbox & NVAVP_INBOX_VALID))
 		inbox = 0x00000000;
 
-	writel(0x00000000, NVAVP_OS_INBOX);
-
 	if (inbox & NVE276_OS_INTERRUPT_VIDEO_IDLE)
 		schedule_work(&nvavp->clock_disable_work);
 
@@ -230,6 +227,7 @@ static int nvavp_service(struct nvavp_info *nvavp)
 		dev_err(&nvavp->nvhost_dev->dev, "AVP breakpoint hit\n");
 	if (inbox & NVE276_OS_INTERRUPT_TIMEOUT)
 		dev_err(&nvavp->nvhost_dev->dev, "AVP timeout\n");
+	writel(inbox & NVAVP_INBOX_VALID, NVAVP_OS_INBOX);
 
 	return 0;
 }
@@ -1189,7 +1187,8 @@ static const struct file_operations tegra_nvavp_fops = {
 	.unlocked_ioctl	= tegra_nvavp_ioctl,
 };
 
-static int tegra_nvavp_probe(struct nvhost_device *ndev)
+static int tegra_nvavp_probe(struct nvhost_device *ndev,
+	struct nvhost_device_id *id_table)
 {
 	struct nvavp_info *nvavp;
 	int irq;

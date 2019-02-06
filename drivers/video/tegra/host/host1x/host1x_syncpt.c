@@ -19,10 +19,12 @@
  */
 
 #include <linux/nvhost_ioctl.h>
+#include <trace/events/nvhost.h>
 #include "nvhost_syncpt.h"
 #include "dev.h"
 #include "host1x_syncpt.h"
 #include "host1x_hardware.h"
+#include "chip_support.h"
 
 /**
  * Write the current syncpoint value back to hw.
@@ -99,60 +101,14 @@ static void t20_syncpt_cpu_incr(struct nvhost_syncpt *sp, u32 id)
 	wmb();
 }
 
-/* check for old WAITs to be removed (avoiding a wrap) */
-static int t20_syncpt_wait_check(struct nvhost_syncpt *sp,
-				 struct nvmap_client *nvmap,
-				 u32 waitchk_mask,
-				 struct nvhost_waitchk *wait,
-				 int num_waitchk)
+/* remove a wait pointed to by patch_addr */
+static int host1x_syncpt_patch_wait(struct nvhost_syncpt *sp,
+		void *patch_addr)
 {
-	u32 idx;
-	int err = 0;
-
-	/* get current syncpt values */
-	for (idx = 0; idx < NV_HOST1X_SYNCPT_NB_PTS; idx++) {
-		if (BIT(idx) & waitchk_mask)
-			nvhost_syncpt_update_min(sp, idx);
-	}
-
-	BUG_ON(!wait && !num_waitchk);
-
-	/* compare syncpt vs wait threshold */
-	while (num_waitchk) {
-		u32 override;
-
-		BUG_ON(wait->syncpt_id >= NV_HOST1X_SYNCPT_NB_PTS);
-		if (nvhost_syncpt_is_expired(sp,
-					wait->syncpt_id, wait->thresh)) {
-			/*
-			 * NULL an already satisfied WAIT_SYNCPT host method,
-			 * by patching its args in the command stream. The
-			 * method data is changed to reference a reserved
-			 * (never given out or incr) NVSYNCPT_GRAPHICS_HOST
-			 * syncpt with a matching threshold value of 0, so
-			 * is guaranteed to be popped by the host HW.
-			 */
-			dev_dbg(&syncpt_to_dev(sp)->dev->dev,
-			    "drop WAIT id %d (%s) thresh 0x%x, min 0x%x\n",
-			    wait->syncpt_id,
-			    syncpt_op(sp).name(sp, wait->syncpt_id),
-			    wait->thresh,
-			    nvhost_syncpt_read_min(sp, wait->syncpt_id));
-
-			/* patch the wait */
-			override = nvhost_class_host_wait_syncpt(
-					NVSYNCPT_GRAPHICS_HOST, 0);
-			err = nvmap_patch_word(nvmap,
-					(struct nvmap_handle *)wait->mem,
-					wait->offset, override);
-			if (err)
-				break;
-		}
-
-		wait++;
-		num_waitchk--;
-	}
-	return err;
+	u32 override = nvhost_class_host_wait_syncpt(
+			NVSYNCPT_GRAPHICS_HOST, 0);
+	__raw_writel(override, patch_addr);
+	return 0;
 }
 
 
@@ -189,7 +145,7 @@ static void t20_syncpt_debug(struct nvhost_syncpt *sp)
 			continue;
 		dev_info(&syncpt_to_dev(sp)->dev->dev,
 			"id %d (%s) min %d max %d\n",
-			i, syncpt_op(sp).name(sp, i),
+			i, syncpt_op().name(sp, i),
 			min, max);
 
 	}
@@ -223,23 +179,23 @@ static void syncpt_mutex_unlock(struct nvhost_syncpt *sp,
 	writel(0, sync_regs + (HOST1X_SYNC_MLOCK_0 + idx * 4));
 }
 
-int host1x_init_syncpt_support(struct nvhost_master *host)
+int host1x_init_syncpt_support(struct nvhost_master *host,
+	struct nvhost_chip_support *op)
 {
-
 	host->sync_aperture = host->aperture +
 		(NV_HOST1X_CHANNEL0_BASE +
 			HOST1X_CHANNEL_SYNC_REG_BASE);
 
-	host->op.syncpt.reset = t20_syncpt_reset;
-	host->op.syncpt.reset_wait_base = t20_syncpt_reset_wait_base;
-	host->op.syncpt.read_wait_base = t20_syncpt_read_wait_base;
-	host->op.syncpt.update_min = t20_syncpt_update_min;
-	host->op.syncpt.cpu_incr = t20_syncpt_cpu_incr;
-	host->op.syncpt.wait_check = t20_syncpt_wait_check;
-	host->op.syncpt.debug = t20_syncpt_debug;
-	host->op.syncpt.name = t20_syncpt_name;
-	host->op.syncpt.mutex_try_lock = syncpt_mutex_try_lock;
-	host->op.syncpt.mutex_unlock = syncpt_mutex_unlock;
+	op->syncpt.reset = t20_syncpt_reset;
+	op->syncpt.reset_wait_base = t20_syncpt_reset_wait_base;
+	op->syncpt.read_wait_base = t20_syncpt_read_wait_base;
+	op->syncpt.update_min = t20_syncpt_update_min;
+	op->syncpt.cpu_incr = t20_syncpt_cpu_incr;
+	op->syncpt.patch_wait = host1x_syncpt_patch_wait;
+	op->syncpt.debug = t20_syncpt_debug;
+	op->syncpt.name = t20_syncpt_name;
+	op->syncpt.mutex_try_lock = syncpt_mutex_try_lock;
+	op->syncpt.mutex_unlock = syncpt_mutex_unlock;
 
 	host->syncpt.nb_pts = NV_HOST1X_SYNCPT_NB_PTS;
 	host->syncpt.nb_bases = NV_HOST1X_SYNCPT_NB_BASES;

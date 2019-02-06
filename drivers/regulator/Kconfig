@@ -117,6 +117,15 @@ config REGULATOR_MAX8952
 	  via I2C bus. Maxim 8952 has one voltage output and supports 4 DVS
 	  modes ranging from 0.77V to 1.40V by 0.01V steps.
 
+config REGULATOR_MAX8973
+	tristate "Maxim MAX8973 Power Regulator"
+	depends on I2C
+	select REGMAP_I2C
+	help
+	  This driver supports MAX8973 voltage regulator chip.
+	  The MAX8973 high-efficiency, three-phase, DC-DC step-down switching
+	  regulator delivers up to 9A of output current.
+
 config REGULATOR_MAX8997
 	tristate "Maxim 8997/8966 regulator"
 	depends on MFD_MAX8997
@@ -319,6 +328,13 @@ config REGULATOR_TPS6586X
 	help
 	  This driver supports TPS6586X voltage regulator chips.
 
+config REGULATOR_TPS65090
+	tristate "TI TPS65090 Power regulator"
+	depends on MFD_TPS65090
+	help
+	  This driver provides support for the voltage regulators on the
+	  TI TPS65090 PMIC.
+
 config REGULATOR_TPS6524X
 	tristate "TI TPS6524X Power regulators"
 	depends on SPI
@@ -358,12 +374,6 @@ config REGULATOR_TPS6591X
 	default n
 	help
 	  This driver supports TPS6591X voltage regulator chips.
-
-config REGULATOR_TPS65090
-	tristate "TI TPS65090 Power regulators"
-	depends on MFD_TPS65090
-	help
-	  This driver supports TPS65090 voltage regulator chips.
 
 config REGULATOR_TPS80031
 	tristate "TI TPS80031 Power regulators"

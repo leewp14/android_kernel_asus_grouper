@@ -29,23 +29,23 @@
 #define tps80031_rails(_name) "tps80031_"#_name
 
 enum {
-	TPS80031_ID_VIO,
-	TPS80031_ID_SMPS1,
-	TPS80031_ID_SMPS2,
-	TPS80031_ID_SMPS3,
-	TPS80031_ID_SMPS4,
-	TPS80031_ID_VANA,
-	TPS80031_ID_LDO1,
-	TPS80031_ID_LDO2,
-	TPS80031_ID_LDO3,
-	TPS80031_ID_LDO4,
-	TPS80031_ID_LDO5,
-	TPS80031_ID_LDO6,
-	TPS80031_ID_LDO7,
-	TPS80031_ID_LDOLN,
-	TPS80031_ID_LDOUSB,
-	TPS80031_ID_VBUS,
-	TPS80031_ID_CHARGER,
+	TPS80031_REGULATOR_VIO,
+	TPS80031_REGULATOR_SMPS1,
+	TPS80031_REGULATOR_SMPS2,
+	TPS80031_REGULATOR_SMPS3,
+	TPS80031_REGULATOR_SMPS4,
+	TPS80031_REGULATOR_VANA,
+	TPS80031_REGULATOR_LDO1,
+	TPS80031_REGULATOR_LDO2,
+	TPS80031_REGULATOR_LDO3,
+	TPS80031_REGULATOR_LDO4,
+	TPS80031_REGULATOR_LDO5,
+	TPS80031_REGULATOR_LDO6,
+	TPS80031_REGULATOR_LDO7,
+	TPS80031_REGULATOR_LDOLN,
+	TPS80031_REGULATOR_LDOUSB,
+	TPS80031_REGULATOR_VBUS,
+	TPS80031_REGULATOR_CHARGER,
 };
 
 
@@ -74,6 +74,9 @@ enum {
  * @flags: Configuration flag to configure the rails. It should be ORed of
  *	 above enums.
  * @delay_us: Delay in microsecond after setting the desired voltage.
+ * @tolerance_uv: Tolerance micorvolts in minimum side. The voltage min
+ *	will be adjusted to this tolerance like
+ *		actual_vmin = vmin - tolerance_uv
  */
 
 struct tps80031_regulator_platform_data {
@@ -84,6 +87,7 @@ struct tps80031_regulator_platform_data {
 	unsigned int ext_ctrl_flag;
 	unsigned int flags;
 	int delay_us;
+	unsigned int tolerance_uv;
 };
 
 #endif	/* __REGULATOR_TPS80031_H */
