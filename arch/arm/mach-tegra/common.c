@@ -28,7 +28,6 @@
 #include <linux/memblock.h>
 #include <linux/bitops.h>
 #include <linux/sched.h>
-#include <linux/cpufreq.h>
 
 #include <asm/hardware/cache-l2x0.h>
 #include <asm/system.h>
@@ -87,8 +86,6 @@
 
 unsigned long tegra_bootloader_fb_start;
 unsigned long tegra_bootloader_fb_size;
-unsigned long tegra_bootloader_fb2_start;
-unsigned long tegra_bootloader_fb2_size;
 unsigned long tegra_fb_start;
 unsigned long tegra_fb_size;
 unsigned long tegra_fb2_start;
@@ -365,7 +362,6 @@ void tegra_init_cache(bool init)
 	writel(0x770, p + L2X0_DATA_LATENCY_CTRL);
 #endif
 #endif
-	writel(0x3, p + L2X0_POWER_CTRL);
 	aux_ctrl = readl(p + L2X0_CACHE_TYPE);
 	aux_ctrl = (aux_ctrl & 0x700) << (17-8);
 	aux_ctrl |= 0x7C000001;
@@ -498,21 +494,6 @@ static int __init tegra_bootloader_fb_arg(char *options)
 	return 0;
 }
 early_param("tegra_fbmem", tegra_bootloader_fb_arg);
-
-static int __init tegra_bootloader_fb2_arg(char *options)
-{
-	char *p = options;
-
-	tegra_bootloader_fb2_size = memparse(p, &p);
-	if (*p == '@')
-		tegra_bootloader_fb2_start = memparse(p+1, &p);
-
-	pr_info("Found tegra_fbmem2: %08lx@%08lx\n",
-		tegra_bootloader_fb2_size, tegra_bootloader_fb2_start);
-
-	return 0;
-}
-early_param("tegra_fbmem2", tegra_bootloader_fb2_arg);
 
 static int __init tegra_sku_override(char *id)
 {
@@ -935,36 +916,19 @@ void __init tegra_reserve(unsigned long carveout_size, unsigned long fb_size,
 		}
 	}
 
-	if (tegra_bootloader_fb2_size) {
-		tegra_bootloader_fb2_size =
-				PAGE_ALIGN(tegra_bootloader_fb2_size);
-		if (memblock_reserve(tegra_bootloader_fb2_start,
-				tegra_bootloader_fb2_size)) {
-			pr_err("Failed to reserve bootloader frame buffer2 "
-				"%08lx@%08lx\n", tegra_bootloader_fb2_size,
-				tegra_bootloader_fb2_start);
-			tegra_bootloader_fb2_start = 0;
-			tegra_bootloader_fb2_size = 0;
-		}
-	}
-
 	pr_info("Tegra reserved memory:\n"
-		"LP0:                     %08lx - %08lx\n"
-		"Bootloader framebuffer:  %08lx - %08lx\n"
-		"Bootloader framebuffer2: %08lx - %08lx\n"
-		"Framebuffer:             %08lx - %08lx\n"
-		"2nd Framebuffer:         %08lx - %08lx\n"
-		"Carveout:                %08lx - %08lx\n"
-		"Vpr:                     %08lx - %08lx\n",
+		"LP0:                    %08lx - %08lx\n"
+		"Bootloader framebuffer: %08lx - %08lx\n"
+		"Framebuffer:            %08lx - %08lx\n"
+		"2nd Framebuffer:        %08lx - %08lx\n"
+		"Carveout:               %08lx - %08lx\n"
+		"Vpr:                    %08lx - %08lx\n",
 		tegra_lp0_vec_start,
 		tegra_lp0_vec_size ?
 			tegra_lp0_vec_start + tegra_lp0_vec_size - 1 : 0,
 		tegra_bootloader_fb_start,
 		tegra_bootloader_fb_size ?
-		 tegra_bootloader_fb_start + tegra_bootloader_fb_size - 1 : 0,
-		tegra_bootloader_fb2_start,
-		tegra_bootloader_fb2_size ?
-		 tegra_bootloader_fb2_start + tegra_bootloader_fb2_size - 1 : 0,
+			tegra_bootloader_fb_start + tegra_bootloader_fb_size - 1 : 0,
 		tegra_fb_start,
 		tegra_fb_size ?
 			tegra_fb_start + tegra_fb_size - 1 : 0,
@@ -1037,60 +1001,121 @@ void __init tegra_release_bootloader_fb(void)
 		if (memblock_free(tegra_bootloader_fb_start,
 						tegra_bootloader_fb_size))
 			pr_err("Failed to free bootloader fb.\n");
-	if (tegra_bootloader_fb2_size)
-		if (memblock_free(tegra_bootloader_fb2_start,
-						tegra_bootloader_fb2_size))
-			pr_err("Failed to free bootloader fb2.\n");
 }
 
 #ifdef CONFIG_TEGRA_CONVSERVATIVE_GOV_ON_EARLYSUPSEND
-char cpufreq_default_gov[CONFIG_NR_CPUS][MAX_GOV_NAME_LEN];
-char *cpufreq_conservative_gov = "conservative";
+static char cpufreq_gov_default[32];
+static char *cpufreq_gov_conservative = "conservative";
+static char *cpufreq_sysfs_place_holder="/sys/devices/system/cpu/cpu%i/cpufreq/scaling_governor";
+static char *cpufreq_gov_conservative_param="/sys/devices/system/cpu/cpufreq/conservative/%s";
 
-void cpufreq_store_default_gov(void)
+static void cpufreq_set_governor(char *governor)
 {
-	unsigned int cpu;
-	struct cpufreq_policy *policy;
+	struct file *scaling_gov = NULL;
+	mm_segment_t old_fs;
+	char    buf[128];
+	int i = 0;
+	loff_t offset = 0;
 
-	for (cpu = 0; cpu < CONFIG_NR_CPUS; cpu++) {
-		policy = cpufreq_cpu_get(cpu);
-		if (policy) {
-			sprintf(cpufreq_default_gov[cpu], "%s",
-					policy->governor->name);
-			cpufreq_cpu_put(policy);
-		}
-	}
-}
+	if (governor == NULL)
+		return;
 
-int cpufreq_change_gov(char *target_gov)
-{
-	unsigned int cpu = 0;
-
+	/* change to KERNEL_DS address limit */
+	old_fs = get_fs();
+	set_fs(KERNEL_DS);
 #ifndef CONFIG_TEGRA_AUTO_HOTPLUG
-	for_each_online_cpu(cpu)
+	for_each_online_cpu(i)
 #endif
-	return cpufreq_set_gov(target_gov, cpu);
+	{
+		sprintf(buf, cpufreq_sysfs_place_holder, i);
+		scaling_gov = filp_open(buf, O_RDWR, 0);
+		if (scaling_gov != NULL) {
+			if (scaling_gov->f_op != NULL &&
+				scaling_gov->f_op->write != NULL)
+				scaling_gov->f_op->write(scaling_gov,
+						governor,
+						strlen(governor),
+						&offset);
+			else
+				pr_err("f_op might be null\n");
+
+			filp_close(scaling_gov, NULL);
+		} else {
+			pr_err("%s. Can't open %s\n", __func__, buf);
+		}
+	}
+	set_fs(old_fs);
 }
 
-int cpufreq_restore_default_gov(void)
+void cpufreq_save_default_governor(void)
 {
-	int ret = 0;
-	unsigned int cpu;
+	struct file *scaling_gov = NULL;
+	mm_segment_t old_fs;
+	char    buf[128];
+	loff_t offset = 0;
 
-	for (cpu = 0; cpu < CONFIG_NR_CPUS; cpu++) {
-		if (strlen((const char *)&cpufreq_default_gov[cpu])) {
-			ret = cpufreq_set_gov(cpufreq_default_gov[cpu], cpu);
-			if (ret < 0)
-				/* Unable to restore gov for the cpu as
-				 * It was online on suspend and becomes
-				 * offline on resume.
-				 */
-				pr_info("Unable to restore gov:%s for cpu:%d,"
-						, cpufreq_default_gov[cpu]
-							, cpu);
-		}
-		cpufreq_default_gov[cpu][0] = '\0';
+	/* change to KERNEL_DS address limit */
+	old_fs = get_fs();
+	set_fs(KERNEL_DS);
+
+	buf[127] = 0;
+	sprintf(buf, cpufreq_sysfs_place_holder,0);
+	scaling_gov = filp_open(buf, O_RDONLY, 0);
+	if (scaling_gov != NULL) {
+		if (scaling_gov->f_op != NULL &&
+			scaling_gov->f_op->read != NULL)
+			scaling_gov->f_op->read(scaling_gov,
+					cpufreq_gov_default,
+					32,
+					&offset);
+		else
+			pr_err("f_op might be null\n");
+
+		filp_close(scaling_gov, NULL);
+	} else {
+		pr_err("%s. Can't open %s\n", __func__, buf);
 	}
-	return ret;
+	set_fs(old_fs);
+}
+
+void cpufreq_restore_default_governor(void)
+{
+	cpufreq_set_governor(cpufreq_gov_default);
+}
+
+void cpufreq_set_conservative_governor_param(char *name, int value)
+{
+	struct file *gov_param = NULL;
+	mm_segment_t old_fs;
+	static char buf[128], param_value[8];
+	loff_t offset = 0;
+
+	/* change to KERNEL_DS address limit */
+	old_fs = get_fs();
+	set_fs(KERNEL_DS);
+
+	sprintf(param_value, "%d", value);
+	sprintf(buf, cpufreq_gov_conservative_param, name);
+	gov_param = filp_open(buf, O_RDWR, 0);
+	if (gov_param != NULL) {
+		if (gov_param->f_op != NULL &&
+			gov_param->f_op->write != NULL)
+			gov_param->f_op->write(gov_param,
+					param_value,
+					strlen(param_value),
+					&offset);
+		else
+			pr_err("f_op might be null\n");
+
+		filp_close(gov_param, NULL);
+	} else {
+		pr_err("%s. Can't open %s\n", __func__, buf);
+	}
+	set_fs(old_fs);
+}
+
+void cpufreq_set_conservative_governor(void)
+{
+	cpufreq_set_governor(cpufreq_gov_conservative);
 }
 #endif /* CONFIG_TEGRA_CONVSERVATIVE_GOV_ON_EARLYSUPSEND */

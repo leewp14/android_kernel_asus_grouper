@@ -8,6 +8,7 @@ obj-$(CONFIG_ARCH_TEGRA_2x_SOC)         += common-t2.o
 obj-$(CONFIG_ARCH_TEGRA_3x_SOC)         += common-t3.o
 obj-y                                   += io.o
 obj-y                                   += irq.o
+obj-$(CONFIG_TEGRA_GRHOST)              += syncpt.o
 obj-y                                   += clock.o
 obj-y                                   += clock-common.o
 obj-y                                   += timer.o
@@ -17,7 +18,6 @@ obj-y                                   += tegra2_clocks.o
 obj-y                                   += timer-t2.o
 else
 obj-y                                   += tegra3_clocks.o
-obj-$(CONFIG_DEBUG_FS)                  += clocks_stats.o
 obj-y                                   += timer-t3.o
 endif
 obj-y                                   += pinmux.o

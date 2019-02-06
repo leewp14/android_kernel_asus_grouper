@@ -34,15 +34,12 @@
 #include <linux/spinlock.h>
 #include <linux/uaccess.h>
 #include <linux/vmalloc.h>
-#include <linux/nvmap.h>
 
 #include <asm/cacheflush.h>
 #include <asm/tlbflush.h>
 
 #include <mach/iovmm.h>
-
-#define CREATE_TRACE_POINTS
-#include <trace/events/nvmap.h>
+#include <mach/nvmap.h>
 
 #include "nvmap.h"
 #include "nvmap_ioctl.h"
@@ -764,7 +761,6 @@ static int nvmap_open(struct inode *inode, struct file *filp)
 	priv = nvmap_create_client(dev, "user");
 	if (!priv)
 		return -ENOMEM;
-	trace_nvmap_open(priv);
 
 	priv->super = (filp->f_op == &nvmap_super_fops);
 
@@ -776,7 +772,6 @@ static int nvmap_open(struct inode *inode, struct file *filp)
 
 static int nvmap_release(struct inode *inode, struct file *filp)
 {
-	trace_nvmap_release(filp->private_data);
 	nvmap_client_put(filp->private_data);
 	return 0;
 }
@@ -979,17 +974,20 @@ static void client_stringify(struct nvmap_client *client, struct seq_file *s)
 }
 
 static void allocations_stringify(struct nvmap_client *client,
-				  struct seq_file *s, bool iovmm)
+				  struct seq_file *s)
 {
+	unsigned long base = 0;
 	struct rb_node *n = rb_first(&client->handle_refs);
 
 	for (; n != NULL; n = rb_next(n)) {
 		struct nvmap_handle_ref *ref =
 			rb_entry(n, struct nvmap_handle_ref, node);
 		struct nvmap_handle *handle = ref->handle;
-		if (handle->alloc && handle->heap_pgalloc == iovmm) {
-			unsigned long base = iovmm ? 0:
-				(unsigned long)(handle->carveout->base);
+		if (handle->alloc && !handle->heap_pgalloc) {
+			seq_printf(s, "%-18s %-18s %8lx %10u %8x\n", "", "",
+					(unsigned long)(handle->carveout->base),
+					handle->size, handle->userflags);
+		} else if (handle->alloc && handle->heap_pgalloc) {
 			seq_printf(s, "%-18s %-18s %8lx %10u %8x\n", "", "",
 					base, handle->size, handle->userflags);
 		}
@@ -1013,7 +1011,7 @@ static int nvmap_debug_allocations_show(struct seq_file *s, void *unused)
 			get_client_from_carveout_commit(node, commit);
 		client_stringify(client, s);
 		seq_printf(s, " %10u\n", commit->commit);
-		allocations_stringify(client, s, false);
+		allocations_stringify(client, s);
 		seq_printf(s, "\n");
 		total += commit->commit;
 	}
@@ -1114,14 +1112,14 @@ static int nvmap_debug_iovmm_allocations_show(struct seq_file *s, void *unused)
 	struct nvmap_device *dev = s->private;
 
 	spin_lock_irqsave(&dev->clients_lock, flags);
-	seq_printf(s, "%-18s %18s %8s %10s %8s\n", "CLIENT", "PROCESS", "PID",
-		"SIZE", "FLAGS");
+	seq_printf(s, "%-18s %18s %8s %10s\n", "CLIENT", "PROCESS", "PID",
+		"SIZE");
 	seq_printf(s, "%-18s %18s %8s %10s\n", "", "",
 					"BASE", "SIZE");
 	list_for_each_entry(client, &dev->clients, list) {
 		client_stringify(client, s);
 		seq_printf(s, " %10u\n", atomic_read(&client->iovm_commit));
-		allocations_stringify(client, s, true);
+		allocations_stringify(client, s);
 		seq_printf(s, "\n");
 		total += atomic_read(&client->iovm_commit);
 	}
@@ -1185,15 +1183,13 @@ static int nvmap_probe(struct platform_device *pdev)
 
 	init_waitqueue_head(&dev->iovmm_master.pin_wait);
 	mutex_init(&dev->iovmm_master.pin_lock);
-#ifdef CONFIG_NVMAP_PAGE_POOLS
 	for (i = 0; i < NVMAP_NUM_POOLS; i++)
 		nvmap_page_pool_init(&dev->iovmm_master.pools[i], i);
-#endif
 
 	dev->iovmm_master.iovmm =
-		tegra_iovmm_alloc_client(&pdev->dev, NULL,
+		tegra_iovmm_alloc_client(dev_name(&pdev->dev), NULL,
 			&(dev->dev_user));
-#if defined(CONFIG_TEGRA_IOVMM) || defined(CONFIG_IOMMU_API)
+#ifdef CONFIG_TEGRA_IOVMM
 	if (!dev->iovmm_master.iovmm) {
 		e = PTR_ERR(dev->iovmm_master.iovmm);
 		dev_err(&pdev->dev, "couldn't create iovmm client\n");
@@ -1316,7 +1312,6 @@ static int nvmap_probe(struct platform_device *pdev)
 				dev, &debug_iovmm_clients_fops);
 			debugfs_create_file("allocations", 0664, iovmm_root,
 				dev, &debug_iovmm_allocations_fops);
-#ifdef CONFIG_NVMAP_PAGE_POOLS
 			for (i = 0; i < NVMAP_NUM_POOLS; i++) {
 				char name[40];
 				char *memtype_string[] = {"uc", "wc",
@@ -1327,7 +1322,6 @@ static int nvmap_probe(struct platform_device *pdev)
 					iovmm_root,
 					&dev->iovmm_master.pools[i].npages);
 			}
-#endif
 		}
 	}
 

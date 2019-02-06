@@ -2602,7 +2602,6 @@ struct regulator_dev *regulator_register(struct regulator_desc *regulator_desc,
 	static atomic_t regulator_no = ATOMIC_INIT(0);
 	struct regulator_dev *rdev;
 	int ret, i;
-	const char *supply = NULL;
 
 	if (regulator_desc == NULL)
 		return ERR_PTR(-EINVAL);
@@ -2677,24 +2676,21 @@ struct regulator_dev *regulator_register(struct regulator_desc *regulator_desc,
 	if (ret < 0)
 		goto scrub;
 
-	if (init_data->supply_regulator)
-		supply = init_data->supply_regulator;
-	else if (regulator_desc->supply_name)
-		supply = regulator_desc->supply_name;
-
-	if (supply) {
+	if (init_data->supply_regulator) {
 		struct regulator_dev *r;
 		int found = 0;
 
 		list_for_each_entry(r, &regulator_list, list) {
-			if (strcmp(rdev_get_name(r), supply) == 0) {
+			if (strcmp(rdev_get_name(r),
+				   init_data->supply_regulator) == 0) {
 				found = 1;
 				break;
 			}
 		}
 
 		if (!found) {
-			dev_err(dev, "Failed to find supply %s\n", supply);
+			dev_err(dev, "Failed to find supply %s\n",
+				init_data->supply_regulator);
 			ret = -ENODEV;
 			goto scrub;
 		}

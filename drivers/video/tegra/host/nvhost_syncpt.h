@@ -24,6 +24,7 @@
 #include <linux/kernel.h>
 #include <linux/sched.h>
 #include <linux/nvhost.h>
+#include <mach/nvmap.h>
 #include <linux/atomic.h>
 
 struct nvhost_syncpt;
@@ -58,8 +59,9 @@ void nvhost_syncpt_deinit(struct nvhost_syncpt *);
 
 #define client_managed(id) (BIT(id) & sp->client_managed)
 #define syncpt_to_dev(sp) container_of(sp, struct nvhost_master, syncpt)
-#define SYNCPT_CHECK_PERIOD (2 * HZ)
-#define MAX_STUCK_CHECK_COUNT 15
+#define syncpt_op(sp) (syncpt_to_dev(sp)->op.syncpt)
+#define SYNCPT_CHECK_PERIOD (2*HZ)
+
 
 /**
  * Updates the value sent to hardware.
@@ -138,7 +140,22 @@ static inline int nvhost_syncpt_wait(struct nvhost_syncpt *sp, u32 id, u32 thres
 					  MAX_SCHEDULE_TIMEOUT, NULL);
 }
 
-int nvhost_syncpt_patch_wait(struct nvhost_syncpt *sp, void *patch_addr);
+/*
+ * Check driver supplied waitchk structs for syncpt thresholds
+ * that have already been satisfied and NULL the comparison (to
+ * avoid a wrap condition in the HW).
+ *
+ * @param: sp - global shadowed syncpt struct
+ * @param: nvmap - needed to access command buffer
+ * @param: mask - bit mask of syncpt IDs referenced in WAITs
+ * @param: wait - start of filled in array of waitchk structs
+ * @param: waitend - end ptr (one beyond last valid waitchk)
+ */
+int nvhost_syncpt_wait_check(struct nvhost_syncpt *sp,
+			struct nvmap_client *nvmap,
+			u32 mask,
+			struct nvhost_waitchk *wait,
+			int num_waitchk);
 
 void nvhost_syncpt_debug(struct nvhost_syncpt *sp);
 

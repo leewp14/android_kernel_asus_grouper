@@ -32,7 +32,6 @@
 #include <linux/delay.h>
 #include <linux/timer.h>
 #include <linux/interrupt.h>
-#include <linux/mutex.h>
 #include <asm/unaligned.h>
 #include <linux/miscdevice.h>
 #include <mach/gpio.h>
@@ -114,10 +113,6 @@ enum {
 	REG_STATUS,
 	REG_CAPACITY,
 	REG_SERIAL_NUMBER,
-	REG_CHARGE,
-	REG_CHARGE_FULL,
-	REG_CHARGE_DESIGN,
-	REG_ENERGY,
 	REG_MAX
 };
 
@@ -143,10 +138,6 @@ static struct bq27541_device_data {
 	[REG_TIME_TO_EMPTY]			= BQ27541_DATA(TIME_TO_EMPTY_AVG, 0x16, 0, 65535),
 	[REG_TIME_TO_FULL]			= BQ27541_DATA(TIME_TO_FULL_AVG, 0x18, 0, 65535),
 	[REG_STATUS]				= BQ27541_DATA(STATUS, 0x0a, 0, 65535),
-	[REG_CHARGE]				= BQ27541_DATA(CHARGE_NOW, 0x10, 0, 65535),
-	[REG_CHARGE_FULL]			= BQ27541_DATA(CHARGE_FULL, 0x12, 0, 65535),
-	[REG_CHARGE_DESIGN]			= BQ27541_DATA(CHARGE_FULL_DESIGN, 0x3c, 0, 65535),
-	[REG_ENERGY]				= BQ27541_DATA(ENERGY_NOW, 0x22, 0, 65535),
 	[REG_CAPACITY]				= BQ27541_DATA(CAPACITY, 0x2c, 0, 100),
 };
 
@@ -156,13 +147,9 @@ static enum power_supply_property bq27541_properties[] = {
 	POWER_SUPPLY_PROP_PRESENT,
 	POWER_SUPPLY_PROP_TECHNOLOGY,
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
-	POWER_SUPPLY_PROP_CURRENT_NOW,
 	POWER_SUPPLY_PROP_CAPACITY,
-	POWER_SUPPLY_PROP_CHARGE_NOW,
-	POWER_SUPPLY_PROP_CHARGE_FULL,
-	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
-	POWER_SUPPLY_PROP_ENERGY_NOW,
 	POWER_SUPPLY_PROP_TEMP,
+	POWER_SUPPLY_PROP_CURRENT_NOW,
 };
 
 void check_cabe_type(void)
@@ -273,7 +260,7 @@ static struct bq27541_device_info {
 	unsigned int old_temperature;
 	unsigned int temp_err;
 	unsigned int prj_id;
-	struct mutex lock;
+	spinlock_t lock;
 } *bq27541_device;
 
 static int bq27541_read_i2c(u8 reg, int *rt_value, int b_single)
@@ -523,7 +510,6 @@ static int bq27541_get_psp(int reg_offset, enum power_supply_property psp,
 	union power_supply_propval *val)
 {
 	s32 ret;
-	s16 tmp;
 	int smb_retry=0;
 	int rt_value=0;
 
@@ -549,28 +535,7 @@ static int bq27541_get_psp(int reg_offset, enum power_supply_property psp,
 		if (bq27541_i2c_error)
 			bq27541_i2c_error--;
 	}
-	if (psp == POWER_SUPPLY_PROP_CHARGE_NOW) {
-		val->intval = rt_value * 1000;
-		BAT_NOTICE("charge_now = %u uAh\n", val->intval);
-	}
-	if (psp == POWER_SUPPLY_PROP_CHARGE_FULL) {
-		val->intval = rt_value * 1000;
-		BAT_NOTICE("charge_full = %u uAh\n", val->intval);
-	}
-	if (psp == POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN) {
-		val->intval = rt_value * 1000;
-		BAT_NOTICE("charge_design = %u uAh\n", val->intval);
-	}
-	if (psp == POWER_SUPPLY_PROP_ENERGY_NOW) {
-		val->intval = rt_value * 1000;
-		BAT_NOTICE("energy_now = %u uWh\n", val->intval);
-	}
-	if (psp == POWER_SUPPLY_PROP_CURRENT_NOW) {
-		tmp = (s16)rt_value;
-		val->intval = (tmp < 0) ? -tmp : tmp;
-		val->intval *= 1000;
-		BAT_NOTICE("current_now = %u uA\n", val->intval);
-	}
+
 	if (psp == POWER_SUPPLY_PROP_VOLTAGE_NOW) {
 		if (rt_value >= bq27541_data[REG_VOLTAGE].min_value &&
 			rt_value <= bq27541_data[REG_VOLTAGE].max_value) {
@@ -771,9 +736,6 @@ static int bq27541_get_property(struct power_supply *psy,
 	union power_supply_propval *val)
 {
 	u8 count;
-
-	mutex_lock(&bq27541_device->lock);
-
 	switch (psp) {
 		case POWER_SUPPLY_PROP_PRESENT:
 		case POWER_SUPPLY_PROP_HEALTH:
@@ -797,30 +759,25 @@ static int bq27541_get_property(struct power_supply *psy,
 		case POWER_SUPPLY_PROP_TIME_TO_EMPTY_AVG:
 		case POWER_SUPPLY_PROP_TIME_TO_FULL_AVG:
 		case POWER_SUPPLY_PROP_SERIAL_NUMBER:
-		case POWER_SUPPLY_PROP_CHARGE_NOW:
-		case POWER_SUPPLY_PROP_CHARGE_FULL:
-		case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
-		case POWER_SUPPLY_PROP_ENERGY_NOW:
 			for (count = 0; count < REG_MAX; count++) {
 				if (psp == bq27541_data[count].psp)
 					break;
 			}
 
 			if (bq27541_get_psp(count, psp, val))
-				goto error;
+				return -EINVAL;
 			break;
 
 		default:
 			dev_err(&bq27541_device->client->dev,
 				"%s: INVALID property psp=%u\n", __func__,psp);
-			goto error;
+			return -EINVAL;
 	}
 
-	mutex_unlock(&bq27541_device->lock);
 	return 0;
 
 error:
-	mutex_unlock(&bq27541_device->lock);
+
 	return -EINVAL;
 }
 
@@ -868,8 +825,6 @@ static int bq27541_probe(struct i2c_client *client,
 	bq27541_device->shutdown_disable = 1;
 	bq27541_device->cap_zero_count = 0;
 
-	mutex_init(&bq27541_device->lock);
-
 	if(!is_legal_pack()) {
 		BAT_NOTICE("charger disable !!\n");
 		smb347_charger_enable(0);
@@ -893,6 +848,7 @@ static int bq27541_probe(struct i2c_client *client,
 	INIT_DELAYED_WORK(&bq27541_device->shutdown_en_work, shutdown_enable_set);
 	cancel_delayed_work(&bq27541_device->status_poll_work);
 
+	spin_lock_init(&bq27541_device->lock);
 	wake_lock_init(&bq27541_device->low_battery_wake_lock, WAKE_LOCK_SUSPEND, "low_battery_detection");
 	wake_lock_init(&bq27541_device->cable_wake_lock, WAKE_LOCK_SUSPEND, "cable_state_changed");
 

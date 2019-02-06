@@ -32,7 +32,6 @@
 #include "clock.h"
 #include "reset.h"
 #include "sleep.h"
-#include "cpu-tegra.h"
 
 bool tegra_all_cpus_booted;
 
@@ -210,16 +209,8 @@ int boot_secondary(unsigned int cpu, struct task_struct *idle)
 			/* Early boot, clock infrastructure is not initialized
 			   - CPU mode switch is not allowed */
 			status = -EINVAL;
-		} else {
-#ifdef CONFIG_CPU_FREQ
-			/* set cpu rate is within g-mode range before switch */
-			unsigned int speed = max(
-				(unsigned long)tegra_getspeed(0),
-				clk_get_min_rate(cpu_g_clk) / 1000);
-			tegra_update_cpu_speed(speed);
-#endif
+		} else
 			status = clk_set_parent(cpu_clk, cpu_g_clk);
-		}
 
 		if (status)
 			goto done;
@@ -299,10 +290,7 @@ void __init platform_smp_prepare_cpus(unsigned int max_cpus)
 
 #if defined(CONFIG_HAVE_ARM_SCU)
 	{
-		u32 scu_ctrl = __raw_readl(scu_base) |
-				1 << 3 | /* Enable speculative line fill*/
-				1 << 5 | /* Enable IC standby */
-				1 << 6; /* Enable SCU standby */
+		u32 scu_ctrl = __raw_readl(scu_base) | 1 << 3;
 		if (!(scu_ctrl & 1))
 			__raw_writel(scu_ctrl, scu_base);
 	}

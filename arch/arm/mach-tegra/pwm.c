@@ -3,7 +3,7 @@
  *
  * Tegra pulse-width-modulation controller driver
  *
- * Copyright (c) 2010-2013, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2010, NVIDIA Corporation.
  * Based on arch/arm/plat-mxc/pwm.c by Sascha Hauer <s.hauer@pengutronix.de>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -87,10 +87,9 @@ int pwm_config(struct pwm_device *pwm, int duty_ns, int period_ns)
 
 	if (rate >> PWM_SCALE_WIDTH)
 		return -EINVAL;
-	/* Due to the PWM divider is zero-based, we need to minus 1 to get
-	 *desired frequency*/
-	if (rate > 0)
-		 rate--;
+        /* Due to the PWM divider is zero-based, we need to minus 1 to get desired frequency*/
+	if (rate>0)
+	    rate--;
 
 	val |= (rate << PWM_SCALE_SHIFT);
 
@@ -131,7 +130,7 @@ void pwm_disable(struct pwm_device *pwm)
 		clk_disable(pwm->clk);
 		pwm->clk_enb = 0;
 	} else
-		dev_info(&pwm->pdev->dev, "%s called on disabled PWM\n",
+		dev_warn(&pwm->pdev->dev, "%s called on disabled PWM\n",
 			 __func__);
 	mutex_unlock(&pwm_lock);
 }
@@ -183,16 +182,19 @@ static int tegra_pwm_probe(struct platform_device *pdev)
 {
 	struct pwm_device *pwm;
 	struct resource *r;
+	int ret;
 
-	pwm = devm_kzalloc(&pdev->dev, sizeof(*pwm), GFP_KERNEL);
+	pwm = kzalloc(sizeof(*pwm), GFP_KERNEL);
 	if (!pwm) {
 		dev_err(&pdev->dev, "failed to allocate memory\n");
 		return -ENOMEM;
 	}
+	pwm->clk = clk_get(&pdev->dev, NULL);
 
-	pwm->clk = devm_clk_get(&pdev->dev, NULL);
-	if (IS_ERR(pwm->clk))
-		return PTR_ERR(pwm->clk);
+	if (IS_ERR(pwm->clk)) {
+		ret = PTR_ERR(pwm->clk);
+		goto err_free;
+	}
 
 	pwm->clk_enb = 0;
 	pwm->in_use = 0;
@@ -202,13 +204,22 @@ static int tegra_pwm_probe(struct platform_device *pdev)
 	r = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!r) {
 		dev_err(&pdev->dev, "no memory resources defined\n");
-		return -ENODEV;
+		ret = -ENODEV;
+		goto err_put_clk;
 	}
 
-	pwm->mmio_base = devm_request_and_ioremap(&pdev->dev, r);
+	r = request_mem_region(r->start, resource_size(r), pdev->name);
+	if (!r) {
+		dev_err(&pdev->dev, "failed to request memory\n");
+		ret = -EBUSY;
+		goto err_put_clk;
+	}
+
+	pwm->mmio_base = ioremap(r->start, resource_size(r));
 	if (!pwm->mmio_base) {
-		dev_err(&pdev->dev, "failed to request/ioremap memory\n");
-		return -EADDRNOTAVAIL;
+		dev_err(&pdev->dev, "failed to ioremap() region\n");
+		ret = -ENODEV;
+		goto err_free_mem;
 	}
 
 	platform_set_drvdata(pdev, pwm);
@@ -219,7 +230,13 @@ static int tegra_pwm_probe(struct platform_device *pdev)
 
 	return 0;
 
-
+err_free_mem:
+	release_mem_region(r->start, resource_size(r));
+err_put_clk:
+	clk_put(pwm->clk);
+err_free:
+	kfree(pwm);
+	return ret;
 }
 
 static int __devexit tegra_pwm_remove(struct platform_device *pdev)
@@ -242,9 +259,16 @@ static int __devexit tegra_pwm_remove(struct platform_device *pdev)
 	mutex_unlock(&pwm_lock);
 
 	rc = pwm_writel(pwm, 0);
+
+	iounmap(pwm->mmio_base);
+	release_mem_region(r->start, resource_size(r));
+
 	if (pwm->clk_enb)
 		clk_disable(pwm->clk);
 
+	clk_put(pwm->clk);
+
+	kfree(pwm);
 	return rc;
 }
 

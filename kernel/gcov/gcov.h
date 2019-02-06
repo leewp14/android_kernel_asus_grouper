@@ -17,14 +17,7 @@
 #include <linux/types.h>
 
 /*
- * GCC 4.6 drops the 'name' field from 'struct gcov_fn_info'.
- */
-#if __GNUC__ < 4 || (__GNUC__ == 4 && __GNUC_MINOR__ < 6)
-#define GCOV_FN_INFO_HAS_NAME_FIELD
-#endif
-
-/*
- * Profiling data types used for at least gcc 4.4 and 4.6 - these are defined by
+ * Profiling data types used for gcc 3.4 and above - these are defined by
  * gcc and need to be kept as close to the original definition as possible to
  * remain compatible.
  */
@@ -84,9 +77,7 @@ struct gcov_fn_info {
 	unsigned int lineno_checksum;
 	unsigned int cfg_checksum;
 	unsigned int dc_offset;
-#ifdef GCOV_FN_INFO_HAS_NAME_FIELD
 	const char   *name;
-#endif
 	unsigned int n_ctrs[0];
 };
 

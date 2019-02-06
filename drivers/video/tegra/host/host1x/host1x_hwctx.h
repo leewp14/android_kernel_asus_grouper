@@ -40,7 +40,7 @@ struct host1x_hwctx {
 	u32 save_thresh;
 	u32 save_slots;
 
-	struct mem_handle *restore;
+	struct nvmap_handle_ref *restore;
 	u32 *restore_virt;
 	phys_addr_t restore_phys;
 	u32 restore_size;
@@ -54,7 +54,7 @@ struct host1x_hwctx_handler {
 	u32 waitbase;
 	u32 restore_size;
 	u32 restore_incrs;
-	struct mem_handle *save_buf;
+	struct nvmap_handle_ref *save_buf;
 	u32 save_incrs;
 	u32 save_thresh;
 	u32 save_slots;

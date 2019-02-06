@@ -26,12 +26,10 @@
 #include "dev.h"
 #include "debug.h"
 #include "nvhost_cdma.h"
+#include "../../nvmap/nvmap.h"
 
 #include "host1x_hardware.h"
 #include "host1x_cdma.h"
-#include "nvhost_job.h"
-#include "chip_support.h"
-#include "nvhost_memmgr.h"
 
 #define NVHOST_DEBUG_MAX_PAGE_OFFSET 102400
 
@@ -162,14 +160,48 @@ static void show_channel_word(struct output *o, int *state, int *count,
 	}
 }
 
-static void do_show_channel_gather(struct output *o,
+static void show_channel_gather(struct output *o, u32 addr,
 		phys_addr_t phys_addr,
-		u32 words, struct nvhost_cdma *cdma,
-		phys_addr_t pin_addr, u32 *map_addr)
+		u32 words, struct nvhost_cdma *cdma)
 {
+#if defined(CONFIG_TEGRA_NVMAP)
 	/* Map dmaget cursor to corresponding nvmap_handle */
-	u32 offset;
+	struct push_buffer *pb = &cdma->push_buffer;
+	u32 cur = addr - pb->phys;
+	struct nvmap_client_handle *nvmap = &pb->nvmap[cur/8];
+	struct nvmap_handle_ref ref;
+	u32 *map_addr, offset;
+	phys_addr_t pin_addr;
 	int state, count, i;
+
+	if ((u32)nvmap->handle == NVHOST_CDMA_PUSH_GATHER_CTXSAVE) {
+		nvhost_debug_output(o, "[context save]\n");
+		return;
+	}
+
+	if (!nvmap->handle || !nvmap->client
+			|| atomic_read(&nvmap->handle->ref) < 1) {
+		nvhost_debug_output(o, "[already deallocated]\n");
+		return;
+	}
+
+	/* Create a fake nvmap_handle_ref - nvmap requires it
+	 * but accesses only the first field - nvmap_handle */
+	ref.handle = nvmap->handle;
+
+	map_addr = nvmap_mmap(&ref);
+	if (!map_addr) {
+		nvhost_debug_output(o, "[could not mmap]\n");
+		return;
+	}
+
+	/* Get base address from nvmap */
+	pin_addr = nvmap_pin(nvmap->client, &ref);
+	if (IS_ERR_VALUE(pin_addr)) {
+		nvhost_debug_output(o, "[couldn't pin]\n");
+		nvmap_munmap(&ref, map_addr);
+		return;
+	}
 
 	offset = phys_addr - pin_addr;
 	/*
@@ -188,45 +220,33 @@ static void do_show_channel_gather(struct output *o,
 					*(map_addr + offset/4 + i),
 					cdma);
 	}
+	nvmap_unpin(nvmap->client, &ref);
+	nvmap_munmap(&ref, map_addr);
+#endif
 }
 
-static void show_channel_gather(struct output *o, u32 addr,
-		phys_addr_t phys_addr,
-		u32 words, struct nvhost_cdma *cdma)
+static void show_channel_pair(struct output *o, u32 addr,
+		u32 w0, u32 w1, struct nvhost_cdma *cdma)
 {
-#if defined(CONFIG_TEGRA_NVMAP)
-	/* Map dmaget cursor to corresponding nvmap_handle */
-	struct push_buffer *pb = &cdma->push_buffer;
-	u32 cur = addr - pb->phys;
-	struct mem_mgr_handle *nvmap = &pb->client_handle[cur/8];
-	u32 *map_addr, offset;
-	phys_addr_t pin_addr;
+	int state = NVHOST_DBG_STATE_CMD;
+	int count;
 
-	if (!nvmap || !nvmap->handle || !nvmap->client) {
-		nvhost_debug_output(o, "[already deallocated]\n");
-		return;
-	}
+	show_channel_word(o, &state, &count, addr, w0, cdma);
+	show_channel_word(o, &state, &count, addr+4, w1, cdma);
+}
 
-	map_addr = mem_op().mmap(nvmap->handle);
-	if (!map_addr) {
-		nvhost_debug_output(o, "[could not mmap]\n");
-		return;
-	}
+/**
+ * Retrieve the op pair at a slot offset from a DMA address
+ */
+static void cdma_peek(struct nvhost_cdma *cdma,
+		      u32 dmaget, int slot, u32 *out)
+{
+	u32 offset = dmaget - cdma->push_buffer.phys;
+	u32 *p = cdma->push_buffer.mapped;
 
-	/* Get base address from nvmap */
-	pin_addr = mem_op().pin(nvmap->client, nvmap->handle);
-	if (IS_ERR_VALUE(pin_addr)) {
-		nvhost_debug_output(o, "[couldn't pin]\n");
-		mem_op().munmap(nvmap->handle, map_addr);
-		return;
-	}
-
-	offset = phys_addr - pin_addr;
-	do_show_channel_gather(o, phys_addr, words, cdma,
-			pin_addr, map_addr);
-	mem_op().unpin(nvmap->client, nvmap->handle);
-	mem_op().munmap(nvmap->handle, map_addr);
-#endif
+	offset = ((offset + slot * 8) & (PUSH_BUFFER_SIZE - 1)) >> 2;
+	out[0] = p[offset];
+	out[1] = p[offset + 1];
 }
 
 u32 previous_oppair(struct nvhost_cdma *cdma, u32 cur)
@@ -238,42 +258,6 @@ u32 previous_oppair(struct nvhost_cdma *cdma, u32 cur)
 	return prev;
 }
 
-void show_channel_gathers(struct output *o, struct nvhost_cdma *cdma)
-{
-	struct nvhost_job *job;
-
-	list_for_each_entry(job, &cdma->sync_queue, list) {
-		int i;
-		nvhost_debug_output(o, "\n%p: JOB, syncpt_id=%d, syncpt_val=%d,"
-				" first_get=%08x, timeout=%d, ctx=%p,"
-				" num_slots=%d, num_handles=%d\n",
-				job,
-				job->syncpt_id,
-				job->syncpt_end,
-				job->first_get,
-				job->timeout,
-				job->hwctx,
-				job->num_slots,
-				job->num_unpins);
-
-		for (i = 0; i < job->num_gathers; i++) {
-			struct nvhost_job_gather *g = &job->gathers[i];
-			u32 *mapped = mem_op().mmap(g->ref);
-			if (!mapped) {
-				nvhost_debug_output(o, "[could not mmap]\n");
-				continue;
-			}
-
-			nvhost_debug_output(o, "    GATHER at %08x, %d words\n",
-				g->mem, g->words);
-
-			do_show_channel_gather(o, g->mem + g->offset,
-					g->words, cdma, g->mem, mapped);
-			mem_op().munmap(g->ref, mapped);
-		}
-	}
-}
-
 static void t20_debug_show_channel_cdma(struct nvhost_master *m,
 	struct nvhost_channel *ch, struct output *o, int chid)
 {
@@ -282,6 +266,7 @@ static void t20_debug_show_channel_cdma(struct nvhost_master *m,
 	u32 dmaput, dmaget, dmactrl;
 	u32 cbstat, cbread;
 	u32 val, base, baseval;
+	u32 pbw[2];
 
 	dmaput = readl(channel->aperture + HOST1X_CHANNEL_DMAPUT);
 	dmaget = readl(channel->aperture + HOST1X_CHANNEL_DMAGET);
@@ -330,7 +315,9 @@ static void t20_debug_show_channel_cdma(struct nvhost_master *m,
 		dmaput, dmaget, dmactrl);
 	nvhost_debug_output(o, "CBREAD %08x, CBSTAT %08x\n", cbread, cbstat);
 
-	show_channel_gathers(o, cdma);
+	cdma_peek(cdma, dmaget, -1, pbw);
+	show_channel_pair(o, previous_oppair(cdma, dmaget),
+		pbw[0], pbw[1], &channel->cdma);
 	nvhost_debug_output(o, "\n");
 }
 
@@ -407,11 +394,11 @@ static void t20_debug_show_mlocks(struct nvhost_master *m, struct output *o)
 	nvhost_debug_output(o, "\n");
 }
 
-int nvhost_init_t20_debug_support(struct nvhost_chip_support *op)
+int nvhost_init_t20_debug_support(struct nvhost_master *host)
 {
-	op->debug.show_channel_cdma = t20_debug_show_channel_cdma;
-	op->debug.show_channel_fifo = t20_debug_show_channel_fifo;
-	op->debug.show_mlocks = t20_debug_show_mlocks;
+	host->op.debug.show_channel_cdma = t20_debug_show_channel_cdma;
+	host->op.debug.show_channel_fifo = t20_debug_show_channel_fifo;
+	host->op.debug.show_mlocks = t20_debug_show_mlocks;
 
 	return 0;
 }

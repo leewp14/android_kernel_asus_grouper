@@ -135,8 +135,6 @@ struct tegra_dc {
 
 	struct tegra_dc_ext		*ext;
 
-	struct tegra_dc_feature		*feature;
-
 #ifdef CONFIG_DEBUG_FS
 	struct dentry			*debugdir;
 #endif
@@ -197,10 +195,6 @@ static inline unsigned long tegra_dc_get_default_emc_clk_rate(
 {
 	return dc->pdata->emc_clk_rate ? dc->pdata->emc_clk_rate : ULONG_MAX;
 }
-
-static inline void tegra_dc_unmask_interrupt(struct tegra_dc *dc, u32 int_val);
-static inline void tegra_dc_mask_interrupt(struct tegra_dc *dc, u32 int_val);
-static bool tegra_dc_windows_are_dirty(struct tegra_dc *dc);
 
 static inline void tegra_dc_unmask_interrupt(struct tegra_dc *dc, u32 int_val);
 static inline void tegra_dc_mask_interrupt(struct tegra_dc *dc, u32 int_val);

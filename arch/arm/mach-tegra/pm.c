@@ -171,7 +171,7 @@ struct suspend_context tegra_sctx;
 #define MC_SECURITY_SIZE	0x70
 #define MC_SECURITY_CFG2	0x7c
 
-#define AWAKE_CPU_FREQ_MIN	51000
+#define AWAKE_CPU_FREQ_MIN	100000
 static struct pm_qos_request_list awake_cpu_freq_req;
 
 struct dvfs_rail *tegra_cpu_rail;
@@ -527,6 +527,7 @@ unsigned int tegra_idle_lp2_last(unsigned int sleep_time, unsigned int flags)
 		mode |= TEGRA_POWER_PWRREQ_OE;
 	mode &= ~TEGRA_POWER_EFFECT_LP0;
 	pmc_32kwritel(mode, PMC_CTRL);
+	mode |= flags;
 
 	tegra_cluster_switch_time(flags, tegra_cluster_switch_time_id_start);
 
@@ -538,7 +539,7 @@ unsigned int tegra_idle_lp2_last(unsigned int sleep_time, unsigned int flags)
 		trace_cpu_cluster(POWER_CPU_CLUSTER_START);
 		set_power_timers(pdata->cpu_timer, 0,
 			clk_get_rate_all_locked(tegra_pclk));
-		tegra_cluster_switch_prolog(flags);
+		tegra_cluster_switch_prolog(mode);
 	} else {
 		set_power_timers(pdata->cpu_timer, pdata->cpu_off_timer,
 			clk_get_rate_all_locked(tegra_pclk));
@@ -548,7 +549,7 @@ unsigned int tegra_idle_lp2_last(unsigned int sleep_time, unsigned int flags)
 		tegra_lp2_set_trigger(sleep_time);
 
 	cpu_complex_pm_enter();
-	suspend_cpu_complex(flags);
+	suspend_cpu_complex(mode);
 	tegra_cluster_switch_time(flags, tegra_cluster_switch_time_id_prolog);
 	flush_cache_all();
 	/*
@@ -565,7 +566,7 @@ unsigned int tegra_idle_lp2_last(unsigned int sleep_time, unsigned int flags)
 
 	tegra_init_cache(false);
 	tegra_cluster_switch_time(flags, tegra_cluster_switch_time_id_switch);
-	restore_cpu_complex(flags);
+	restore_cpu_complex(mode);
 	cpu_complex_pm_exit();
 
 	remain = tegra_lp2_timer_remain();
@@ -573,7 +574,7 @@ unsigned int tegra_idle_lp2_last(unsigned int sleep_time, unsigned int flags)
 		tegra_lp2_set_trigger(0);
 
 	if (flags & TEGRA_POWER_CLUSTER_MASK) {
-		tegra_cluster_switch_epilog(flags);
+		tegra_cluster_switch_epilog(mode);
 		trace_cpu_cluster(POWER_CPU_CLUSTER_DONE);
 	}
 	tegra_cluster_switch_time(flags, tegra_cluster_switch_time_id_epilog);
@@ -818,8 +819,6 @@ int tegra_suspend_dram(enum tegra_suspend_mode mode, unsigned int flags)
 
 	local_fiq_disable();
 
-	trace_cpu_suspend(CPU_SUSPEND_START);
-
 	cpu_pm_enter();
 	cpu_complex_pm_enter();
 
@@ -882,8 +881,6 @@ int tegra_suspend_dram(enum tegra_suspend_mode mode, unsigned int flags)
 
 	if (pdata && pdata->board_resume)
 		pdata->board_resume(mode, TEGRA_RESUME_AFTER_CPU);
-
-	trace_cpu_suspend(CPU_SUSPEND_DONE);
 
 	local_fiq_enable();
 

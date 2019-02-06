@@ -230,13 +230,13 @@ static struct dvfs core_dvfs_table[] = {
 
 	CORE_DVFS("emc",    0, 1, KHZ,        1, 266500, 266500, 266500, 266500,  533000,  533000,  533000,  533000),
 	CORE_DVFS("emc",    1, 1, KHZ,   102000, 408000, 408000, 408000, 408000,  667000,  667000,  667000,  667000),
-	CORE_DVFS("emc",    2, 1, KHZ,   102000, 450000, 450000, 450000, 450000,  667000,  667000,  800000,  900000),
+	CORE_DVFS("emc",    2, 1, KHZ,   102000, 408000, 408000, 408000, 408000,  667000,  667000,  800000,  900000),
 	CORE_DVFS("emc",    3, 1, KHZ,        1,      1,      1,      1,      1,       1,  625000,  625000,  625000),
 
 	CORE_DVFS("sbus",   0, 1, KHZ,        1, 136000, 164000, 191000, 216000,  216000,  216000,  216000,  216000),
 	CORE_DVFS("sbus",   1, 1, KHZ,    51000, 205000, 205000, 227000, 227000,  267000,  267000,  267000,  267000),
 	CORE_DVFS("sbus",   2, 1, KHZ,    51000, 205000, 205000, 227000, 227000,  267000,  334000,  334000,  334000),
-	CORE_DVFS("sbus",   3, 1, KHZ,        1,      1,      1,      1,      1,       1,  334000,  334000,  334000),
+	CORE_DVFS("sbus",   3, 1, KHZ,        1,      1,      1,      1,      1,       1,  378000,  378000,  378000),
 
 	CORE_DVFS("vi",     0, 1, KHZ,        1, 216000, 285000, 300000, 300000,  300000,  300000,  300000,  300000),
 	CORE_DVFS("vi",     1, 1, KHZ,        1, 216000, 267000, 300000, 371000,  409000,  409000,  409000,  409000),
@@ -299,7 +299,7 @@ static struct dvfs core_dvfs_table[] = {
 	 */
 	CORE_DVFS("pll_m",  -1, 1, KHZ,  533000, 667000, 667000, 800000, 800000, 1066000, 1066000, 1066000, 1066000),
 #ifdef CONFIG_TEGRA_PLLM_RESTRICTED
-	CORE_DVFS("pll_m",   2, 1, KHZ,  533000, 900000, 900000, 900000, 900000, 1066000, 1066000, 1066000, 1066000),
+	CORE_DVFS("pll_m",   2, 1, KHZ,  533000, 800000, 800000, 800000, 800000, 1066000, 1066000, 1066000, 1066000),
 #endif
 	/* Core voltages (mV):		    950,   1000,   1050,   1100,   1150,   1200,    1250,     1300,    1350 */
 	/* Clock limits for I/O peripherals */
@@ -311,28 +311,36 @@ static struct dvfs core_dvfs_table[] = {
 	CORE_DVFS("fuse_burn", -1, 1, KHZ,    1,      1,      1,      1,  26000,  26000,   26000,    26000,   26000),
 	CORE_DVFS("sdmmc1", -1, 1, KHZ,  104000, 104000, 104000, 104000, 104000, 208000,  208000,   208000,  208000),
 	CORE_DVFS("sdmmc3", -1, 1, KHZ,  104000, 104000, 104000, 104000, 104000, 208000,  208000,   208000,  208000),
-	CORE_DVFS("sdmmc4", -1, 1, KHZ,   51000, 102000, 102000, 102000, 102000, 102000,  102000,   102000,  102000),
-	CORE_DVFS("ndflash", -1, 1, KHZ, 120000, 120000, 120000, 120000, 200000, 200000,  200000,   200000,  200000),
+	CORE_DVFS("ndflash", -1, 1, KHZ,      1, 120000, 120000, 120000, 200000, 200000,  200000,   200000,  200000),
 
 	CORE_DVFS("nor",    0, 1, KHZ,        1, 115000, 130000, 130000, 133000, 133000,  133000,   133000,  133000),
-	CORE_DVFS("nor",    1, 1, KHZ,   102000, 115000, 130000, 130000, 133000, 133000,  133000,   133000,  133000),
-	CORE_DVFS("nor",    2, 1, KHZ,   102000, 115000, 130000, 130000, 133000, 133000,  133000,   133000,  133000),
+	CORE_DVFS("nor",    1, 1, KHZ,        1, 115000, 130000, 130000, 133000, 133000,  133000,   133000,  133000),
+	CORE_DVFS("nor",    2, 1, KHZ,        1, 115000, 130000, 130000, 133000, 133000,  133000,   133000,  133000),
 	CORE_DVFS("nor",    3, 1, KHZ,        1,      1,      1,      1,      1,      1,  108000,   108000,  108000),
 
-	CORE_DVFS("sbc1",  -1, 1, KHZ,    36000,  52000,  60000,  60000,  60000, 100000,  100000,   100000,  100000),
-	CORE_DVFS("sbc2",  -1, 1, KHZ,    36000,  52000,  60000,  60000,  60000, 100000,  100000,   100000,  100000),
-	CORE_DVFS("sbc3",  -1, 1, KHZ,    36000,  52000,  60000,  60000,  60000, 100000,  100000,   100000,  100000),
-	CORE_DVFS("sbc4",  -1, 1, KHZ,    36000,  52000,  60000,  60000,  60000, 100000,  100000,   100000,  100000),
-	CORE_DVFS("sbc5",  -1, 1, KHZ,    36000,  52000,  60000,  60000,  60000, 100000,  100000,   100000,  100000),
-	CORE_DVFS("sbc6",  -1, 1, KHZ,    36000,  52000,  60000,  60000,  60000, 100000,  100000,   100000,  100000),
+	CORE_DVFS("sbc1",  -1, 1, KHZ,        1,  52000,  60000,  60000,  60000, 100000,  100000,   100000,  100000),
+	CORE_DVFS("sbc2",  -1, 1, KHZ,        1,  52000,  60000,  60000,  60000, 100000,  100000,   100000,  100000),
+	CORE_DVFS("sbc3",  -1, 1, KHZ,        1,  52000,  60000,  60000,  60000, 100000,  100000,   100000,  100000),
+	CORE_DVFS("sbc4",  -1, 1, KHZ,        1,  52000,  60000,  60000,  60000, 100000,  100000,   100000,  100000),
+	CORE_DVFS("sbc5",  -1, 1, KHZ,        1,  52000,  60000,  60000,  60000, 100000,  100000,   100000,  100000),
+	CORE_DVFS("sbc6",  -1, 1, KHZ,        1,  52000,  60000,  60000,  60000, 100000,  100000,   100000,  100000),
+
+	CORE_DVFS("usbd",  -1, 1, KHZ,        1, 480000, 480000, 480000, 480000, 480000,  480000,   480000,  480000),
+	CORE_DVFS("usb2",  -1, 1, KHZ,        1, 480000, 480000, 480000, 480000, 480000,  480000,   480000,  480000),
+	CORE_DVFS("usb3",  -1, 1, KHZ,        1, 480000, 480000, 480000, 480000, 480000,  480000,   480000,  480000),
 
 	CORE_DVFS("sata",  -1, 1, KHZ,        1, 216000, 216000, 216000, 216000, 216000,  216000,   216000,  216000),
 	CORE_DVFS("sata_oob", -1, 1, KHZ,     1, 216000, 216000, 216000, 216000, 216000,  216000,   216000,  216000),
+	CORE_DVFS("pcie",  -1, 1, KHZ,        1, 250000, 250000, 250000, 250000, 250000,  250000,   250000,  250000),
+	CORE_DVFS("afi",   -1, 1, KHZ,        1, 250000, 250000, 250000, 250000, 250000,  250000,   250000,  250000),
+	CORE_DVFS("pll_e", -1, 1, KHZ,        1, 100000, 100000, 100000, 100000, 100000,  100000,   100000,  100000),
 
+	CORE_DVFS("tvdac", -1, 1, KHZ,        1, 220000, 220000, 220000, 220000, 220000,  220000,   220000,  220000),
 	CORE_DVFS("tvo",   -1, 1, KHZ,        1,      1, 297000, 297000, 297000, 297000,  297000,   297000,  297000),
 	CORE_DVFS("cve",   -1, 1, KHZ,        1,      1, 297000, 297000, 297000, 297000,  297000,   297000,  297000),
-	CORE_DVFS("dsia",  -1, 1, KHZ,   432500, 432500, 432500, 432500, 432500, 432500,  432500,   432500,  432500),
-	CORE_DVFS("dsib",  -1, 1, KHZ,   432500, 432500, 432500, 432500, 432500, 432500,  432500,   432500,  432500),
+	CORE_DVFS("dsia",  -1, 1, KHZ,        1, 275000, 275000, 275000, 275000, 275000,  275000,   275000,  275000),
+	CORE_DVFS("dsib",  -1, 1, KHZ,        1, 275000, 275000, 275000, 275000, 275000,  275000,   275000,  275000),
+	CORE_DVFS("hdmi",  -1, 1, KHZ,        1, 148500, 148500, 148500, 148500, 148500,  148500,   148500,  148500),
 
 	/*
 	 * The clock rate for the display controllers that determines the
@@ -341,16 +349,17 @@ static struct dvfs core_dvfs_table[] = {
 	 * and let the display driver call tegra_dvfs_set_rate manually
 	 */
 	CORE_DVFS("disp1",  0, 0, KHZ,        1, 120000, 120000, 120000, 120000, 190000,  190000,   190000,  190000),
-	CORE_DVFS("disp1",  1, 0, KHZ,   155000, 155000, 268000, 268000, 268000, 268000,  268000,   268000,  268000),
-	CORE_DVFS("disp1",  2, 0, KHZ,   155000, 155000, 268000, 268000, 268000, 268000,  268000,   268000,  268000),
+	CORE_DVFS("disp1",  1, 0, KHZ,        1, 155000, 268000, 268000, 268000, 268000,  268000,   268000,  268000),
+	CORE_DVFS("disp1",  2, 0, KHZ,        1, 155000, 268000, 268000, 268000, 268000,  268000,   268000,  268000),
 	CORE_DVFS("disp1",  3, 0, KHZ,        1, 120000, 120000, 120000, 120000, 190000,  190000,   190000,  190000),
 
 	CORE_DVFS("disp2",  0, 0, KHZ,        1, 120000, 120000, 120000, 120000, 190000,  190000,   190000,  190000),
-	CORE_DVFS("disp2",  1, 0, KHZ,   155000, 155000, 268000, 268000, 268000, 268000,  268000,   268000,  268000),
-	CORE_DVFS("disp2",  2, 0, KHZ,   155000, 155000, 268000, 268000, 268000, 268000,  268000,   268000,  268000),
+	CORE_DVFS("disp2",  1, 0, KHZ,        1, 155000, 268000, 268000, 268000, 268000,  268000,   268000,  268000),
+	CORE_DVFS("disp2",  2, 0, KHZ,        1, 155000, 268000, 268000, 268000, 268000,  268000,   268000,  268000),
 	CORE_DVFS("disp2",  3, 0, KHZ,        1, 120000, 120000, 120000, 120000, 190000,  190000,   190000,  190000),
 
-	CORE_DVFS("pwm",   -1, 1, KHZ,   204000, 408000, 408000, 408000, 408000, 408000,  408000,   408000,  408000),
+	CORE_DVFS("pwm",   -1, 1, KHZ,        1, 408000, 408000, 408000, 408000, 408000,  408000,   408000,  408000),
+	CORE_DVFS("spdif_out", -1, 1, KHZ,    1,  26000,  26000,  26000,  26000,  26000,   26000,    26000,   26000),
 };
 
 
@@ -737,8 +746,6 @@ static struct core_cap tegra3_core_cap;
 static struct core_cap kdvfs_core_cap;
 static struct core_cap user_core_cap;
 
-static struct core_cap user_cbus_cap;
-
 static struct kobject *cap_kobj;
 
 /* Arranged in order required for enabling/lowering the cap */
@@ -867,91 +874,14 @@ core_cap_level_store(struct kobject *kobj, struct kobj_attribute *attr,
 	return count;
 }
 
-static void cbus_cap_update(void)
-{
-	static struct clk *cbus_cap;
-
-	if (!cbus_cap) {
-		cbus_cap = tegra_get_clock_by_name("cap.profile.cbus");
-		if (!cbus_cap) {
-			WARN_ONCE(1, "tegra3_dvfs: cbus profiling is not supported");
-			return;
-		}
-	}
-
-	if (user_cbus_cap.refcnt)
-		clk_set_rate(cbus_cap, user_cbus_cap.level);
-	else
-		clk_set_rate(cbus_cap, clk_get_max_rate(cbus_cap));
-}
-
-static ssize_t
-cbus_cap_state_show(struct kobject *kobj, struct kobj_attribute *attr,
-		    char *buf)
-{
-	return sprintf(buf, "%d\n", user_cbus_cap.refcnt ? 1 : 0);
-}
-static ssize_t
-cbus_cap_state_store(struct kobject *kobj, struct kobj_attribute *attr,
-		     const char *buf, size_t count)
-{
-	int state;
-
-	if (sscanf(buf, "%d", &state) != 1)
-		return -1;
-
-	mutex_lock(&core_cap_lock);
-
-	if (state) {
-		user_cbus_cap.refcnt++;
-		if (user_cbus_cap.refcnt == 1)
-			cbus_cap_update();
-	} else if (user_cbus_cap.refcnt) {
-		user_cbus_cap.refcnt--;
-		if (user_cbus_cap.refcnt == 0)
-			cbus_cap_update();
-	}
-
-	mutex_unlock(&core_cap_lock);
-	return count;
-}
-
-static ssize_t
-cbus_cap_level_show(struct kobject *kobj, struct kobj_attribute *attr,
-		    char *buf)
-{
-	return sprintf(buf, "%d\n", user_cbus_cap.level);
-}
-static ssize_t
-cbus_cap_level_store(struct kobject *kobj, struct kobj_attribute *attr,
-		     const char *buf, size_t count)
-{
-	int level;
-
-	if (sscanf(buf, "%d", &level) != 1)
-		return -1;
-
-	mutex_lock(&core_cap_lock);
-	user_cbus_cap.level = level;
-	cbus_cap_update();
-	mutex_unlock(&core_cap_lock);
-	return count;
-}
-
 static struct kobj_attribute cap_state_attribute =
 	__ATTR(core_cap_state, 0644, core_cap_state_show, core_cap_state_store);
 static struct kobj_attribute cap_level_attribute =
 	__ATTR(core_cap_level, 0644, core_cap_level_show, core_cap_level_store);
-static struct kobj_attribute cbus_state_attribute =
-	__ATTR(cbus_cap_state, 0644, cbus_cap_state_show, cbus_cap_state_store);
-static struct kobj_attribute cbus_level_attribute =
-	__ATTR(cbus_cap_level, 0644, cbus_cap_level_show, cbus_cap_level_store);
 
 const struct attribute *cap_attributes[] = {
 	&cap_state_attribute.attr,
 	&cap_level_attribute.attr,
-	&cbus_state_attribute.attr,
-	&cbus_level_attribute.attr,
 	NULL,
 };
 
@@ -981,7 +911,7 @@ void tegra_dvfs_core_cap_level_set(int level)
 
 static int __init init_core_cap_one(struct clk *c, unsigned long *freqs)
 {
-	int i, v, next_v = 0;
+	int i, v, next_v;
 	unsigned long rate, next_rate = 0;
 
 	for (i = 0; i < ARRAY_SIZE(core_millivolts); i++) {
@@ -1002,7 +932,7 @@ static int __init init_core_cap_one(struct clk *c, unsigned long *freqs)
 
 			next_v = tegra_dvfs_predict_millivolts(
 				c->parent, next_rate);
-			if (IS_ERR_VALUE(next_v)) {
+			if (IS_ERR_VALUE(next_rate)) {
 				pr_debug("tegra3_dvfs: failed to predict %s mV"
 					 " for rate %lu", c->name, next_rate);
 				return -EINVAL;

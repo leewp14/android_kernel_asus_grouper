@@ -9,20 +9,15 @@ nvhost-objs = \
 	bus.o \
 	dev.o \
 	debug.o \
-	bus_client.o \
-	chip_support.o \
-	nvhost_memmgr.o
+	bus_client.o
 
 obj-$(CONFIG_TEGRA_GRHOST) += mpe/
 obj-$(CONFIG_TEGRA_GRHOST) += gr3d/
 obj-$(CONFIG_TEGRA_GRHOST) += host1x/
 obj-$(CONFIG_TEGRA_GRHOST) += t20/
 obj-$(CONFIG_TEGRA_GRHOST) += t30/
+obj-$(CONFIG_TEGRA_GRHOST) += dsi/
 obj-$(CONFIG_TEGRA_GRHOST) += gr2d/
 obj-$(CONFIG_TEGRA_GRHOST) += isp/
-ifeq ($(CONFIG_TEGRA_CAMERA),y)
 obj-$(CONFIG_TEGRA_GRHOST) += vi/
-endif
 obj-$(CONFIG_TEGRA_GRHOST) += nvhost.o
-
-obj-$(CONFIG_TEGRA_GRHOST_USE_NVMAP) += nvmap.o

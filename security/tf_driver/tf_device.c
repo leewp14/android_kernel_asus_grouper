@@ -87,7 +87,7 @@ static long tf_device_ioctl(
 /*
  * Implements the device shutdown callback.
  */
-static void tf_device_shutdown(void);
+static int tf_device_shutdown(void);
 
 
 /*
@@ -99,7 +99,7 @@ static int tf_device_suspend(void);
 /*
  * Implements the device resume callback.
  */
-static void tf_device_resume(void);
+static int tf_device_resume(void);
 
 
 /*---------------------------------------------------------------------------
@@ -762,10 +762,11 @@ exit:
 
 /*----------------------------------------------------------------------------*/
 
-static void tf_device_shutdown(void)
+static int tf_device_shutdown(void)
 {
-	if (0 > tf_power_management(&g_tf_dev.sm, TF_POWER_OPERATION_SHUTDOWN))
-		dprintk(KERN_ERR "tf_device_shutdown failing\n");
+
+	return tf_power_management(&g_tf_dev.sm,
+		TF_POWER_OPERATION_SHUTDOWN);
 }
 
 /*----------------------------------------------------------------------------*/
@@ -780,10 +781,10 @@ static int tf_device_suspend(void)
 
 /*----------------------------------------------------------------------------*/
 
-static void tf_device_resume(void)
+static int tf_device_resume(void)
 {
-	if (0 > tf_power_management(&g_tf_dev.sm, TF_POWER_OPERATION_RESUME))
-		dprintk(KERN_ERR "tf_device_resume failing\n");
+	return tf_power_management(&g_tf_dev.sm,
+		TF_POWER_OPERATION_RESUME);
 }
 
 

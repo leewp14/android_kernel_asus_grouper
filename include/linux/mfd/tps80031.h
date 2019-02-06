@@ -165,7 +165,6 @@ struct tps80031_subdev_info {
 struct tps80031_rtc_platform_data {
 	int irq;
 	struct rtc_time time;
-	int msecure_gpio;
 };
 
 struct tps80031_clk32k_init_data {

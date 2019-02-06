@@ -23,8 +23,6 @@
 #include "host1x/host1x_hardware.h"
 #include "host1x/host1x_syncpt.h"
 #include "gr3d.h"
-#include "chip_support.h"
-#include "nvhost_memmgr.h"
 
 #include <mach/gpufuse.h>
 #include <mach/hardware.h>
@@ -145,14 +143,13 @@ static void save_push_v1(struct nvhost_hwctx *nctx, struct nvhost_cdma *cdma)
 		ctx->restore_phys);
 	/* gather the save buffer */
 	nvhost_cdma_push_gather(cdma,
-			nvhost_get_host(nctx->channel->dev)->memmgr,
-			p->save_buf,
-			0,
+			(void *)NVHOST_CDMA_PUSH_GATHER_CTXSAVE,
+			(void *)NVHOST_CDMA_PUSH_GATHER_CTXSAVE,
 			nvhost_opcode_gather(p->save_size),
 			p->save_phys);
 }
 
-static void save_begin_v1(struct host1x_hwctx_handler *p, u32 *ptr)
+static void __init save_begin_v1(struct host1x_hwctx_handler *p, u32 *ptr)
 {
 	ptr[0] = nvhost_opcode_nonincr(AR3D_DW_MEMORY_OUTPUT_DATA,
 			RESTORE_BEGIN_SIZE);
@@ -160,7 +157,7 @@ static void save_begin_v1(struct host1x_hwctx_handler *p, u32 *ptr)
 	ptr += RESTORE_BEGIN_SIZE;
 }
 
-static void save_direct_v1(u32 *ptr, u32 start_reg, u32 count)
+static void __init save_direct_v1(u32 *ptr, u32 start_reg, u32 count)
 {
 	ptr[0] = nvhost_opcode_setclass(NV_GRAPHICS_3D_CLASS_ID,
 			AR3D_DW_MEMORY_OUTPUT_DATA, 1);
@@ -174,7 +171,7 @@ static void save_direct_v1(u32 *ptr, u32 start_reg, u32 count)
 	ptr[3] = nvhost_opcode_nonincr(NV_CLASS_HOST_INDDATA, count);
 }
 
-static void save_indirect_v1(u32 *ptr, u32 offset_reg, u32 offset,
+static void __init save_indirect_v1(u32 *ptr, u32 offset_reg, u32 offset,
 			u32 data_reg, u32 count)
 {
 	ptr[0] = nvhost_opcode_setclass(NV_GRAPHICS_3D_CLASS_ID, 0, 0);
@@ -191,7 +188,7 @@ static void save_indirect_v1(u32 *ptr, u32 offset_reg, u32 offset,
 	ptr[5] = nvhost_opcode_nonincr(NV_CLASS_HOST_INDDATA, count);
 }
 
-static void save_end_v1(struct host1x_hwctx_handler *p, u32 *ptr)
+static void __init save_end_v1(struct host1x_hwctx_handler *p, u32 *ptr)
 {
 	/* write end of restore buffer */
 	ptr[0] = nvhost_opcode_setclass(NV_GRAPHICS_3D_CLASS_ID,
@@ -225,7 +222,7 @@ static void save_end_v1(struct host1x_hwctx_handler *p, u32 *ptr)
 
 
 
-static void setup_save_regs(struct save_info *info,
+static void __init setup_save_regs(struct save_info *info,
 			const struct hwctx_reginfo *regs,
 			unsigned int nr_regs)
 {
@@ -283,7 +280,7 @@ static void setup_save_regs(struct save_info *info,
 	info->restore_count = restore_count;
 }
 
-static void switch_gpu(struct save_info *info,
+static void __init switch_gpu(struct save_info *info,
 			unsigned int save_src_set,
 			u32 save_dest_sets,
 			u32 restore_dest_sets)
@@ -304,7 +301,7 @@ static void switch_gpu(struct save_info *info,
 	info->restore_count += 1;
 }
 
-static void setup_save(struct host1x_hwctx_handler *p, u32 *ptr)
+static void __init setup_save(struct host1x_hwctx_handler *p, u32 *ptr)
 {
 	struct save_info info = {
 		ptr,
@@ -388,7 +385,7 @@ struct nvhost_hwctx_handler *nvhost_gr3d_t30_ctxhandler_init(
 		u32 syncpt, u32 waitbase,
 		struct nvhost_channel *ch)
 {
-	struct mem_mgr *memmgr;
+	struct nvmap_client *nvmap;
 	u32 *save_ptr;
 	struct host1x_hwctx_handler *p;
 
@@ -396,7 +393,7 @@ struct nvhost_hwctx_handler *nvhost_gr3d_t30_ctxhandler_init(
 	if (!p)
 		return NULL;
 
-	memmgr = nvhost_get_host(ch->dev)->memmgr;
+	nvmap = nvhost_get_host(ch->dev)->nvmap;
 
 	register_sets = tegra_gpu_register_sets();
 	BUG_ON(register_sets == 0 || register_sets > 2);
@@ -406,9 +403,9 @@ struct nvhost_hwctx_handler *nvhost_gr3d_t30_ctxhandler_init(
 
 	setup_save(p, NULL);
 
-	p->save_buf = mem_op().alloc(memmgr, p->save_size * 4, 32,
-				mem_mgr_flag_write_combine);
-	if (IS_ERR_OR_NULL(p->save_buf)) {
+	p->save_buf = nvmap_alloc(nvmap, p->save_size * 4, 32,
+				NVMAP_HANDLE_WRITE_COMBINE, 0);
+	if (IS_ERR(p->save_buf)) {
 		p->save_buf = NULL;
 		return NULL;
 	}
@@ -417,18 +414,16 @@ struct nvhost_hwctx_handler *nvhost_gr3d_t30_ctxhandler_init(
 	if (register_sets == 2)
 		p->save_slots += 2;
 
-	save_ptr = mem_op().mmap(p->save_buf);
+	save_ptr = nvmap_mmap(p->save_buf);
 	if (!save_ptr) {
-		mem_op().put(memmgr, p->save_buf);
+		nvmap_free(nvmap, p->save_buf);
 		p->save_buf = NULL;
 		return NULL;
 	}
 
-	p->save_phys = mem_op().pin(memmgr, p->save_buf);
+	p->save_phys = nvmap_pin(nvmap, p->save_buf);
 
 	setup_save(p, save_ptr);
-
-	mem_op().munmap(p->save_buf, save_ptr);
 
 	p->h.alloc = ctx3d_alloc_v1;
 	p->h.save_push = save_push_v1;

@@ -141,7 +141,6 @@ static __initdata struct tegra_clk_init_table p1852_clk_init_table[] = {
 	{ "i2c4",		"pll_p",	3200000,	true},
 	{ "i2c5",		"pll_p",	3200000,	true},
 	{ "sdmmc2",		"pll_p",	104000000,	false},
-	{"wake.sclk",		NULL,		334000000,	true },
 	{ NULL,			NULL,		0,		0},
 };
 
@@ -333,19 +332,13 @@ static void p1852_spi_init(void)
 	p852_register_spidev();
 }
 
-static struct platform_device tegra_camera = {
-	.name = "tegra_camera",
-	.id = -1,
-};
-
 static struct platform_device *p1852_devices[] __initdata = {
-#if defined(CONFIG_TEGRA_IOVMM_SMMU) || defined(CONFIG_TEGRA_IOMMU_SMMU)
+#if defined(CONFIG_TEGRA_IOVMM_SMMU)
 	&tegra_smmu_device,
 #endif
 #if defined(CONFIG_TEGRA_AVP)
 	&tegra_avp_device,
 #endif
-	&tegra_camera,
 	&tegra_wdt_device
 };
 

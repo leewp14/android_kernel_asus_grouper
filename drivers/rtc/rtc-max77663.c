@@ -2,8 +2,8 @@
  * drivers/rtc/rtc-max77663.c
  * Max77663 RTC driver
  *
- * Copyright 2011-2012, Maxim Integrated Products, Inc.
- * Copyright (c) 2011-2012, NVIDIA CORPORATION. All rights reserved.
+ * Copyright 2011 Maxim Integrated Products, Inc.
+ * Copyright (C) 2011 NVIDIA Corporation
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -227,10 +227,9 @@ static inline int max77663_rtc_tm_to_reg(struct max77663_rtc *rtc, u8 *buf,
 	/* The wday is configured only when disabled alarm. */
 	if (!alarm)
 		buf[RTC_WEEKDAY] = (1 << tm->tm_wday);
-	else {
-	/* Configure its default reset value 0x01, and not enable it. */
-		buf[RTC_WEEKDAY] = 0x01;
-	}
+	else
+		buf[RTC_WEEKDAY] = 0;
+
 	return 0;
 }
 
@@ -432,9 +431,9 @@ static int max77663_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 		alrm->time.tm_wday);
 
 	if (rtc->irq_mask & RTC_IRQ_ALARM1_MASK)
-		alrm->enabled = 0;
-	else
 		alrm->enabled = 1;
+	else
+		alrm->enabled = 0;
 
 	return 0;
 }
@@ -446,8 +445,7 @@ static int max77663_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 	int ret;
 
 	if (rtc->shutdown_ongoing) {
-		dev_warn(rtc->dev, "rtc_set_alarm: "
-			 "Device shutdown on-going, skip alarm setting.\n");
+		dev_warn(rtc->dev, "rtc_set_alarm: Device shutdown on-going, skip alarm setting.\n");
 		return -ESHUTDOWN;
 	}
 	dev_dbg(rtc->dev, "rtc_set_alarm: "

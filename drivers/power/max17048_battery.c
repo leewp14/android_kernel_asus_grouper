@@ -221,11 +221,10 @@ static void max17048_work(struct work_struct *work)
 
 	if (chip->vcell != chip->lasttime_vcell ||
 		chip->soc != chip->lasttime_soc ||
-		chip->status != chip->lasttime_status) {
+		chip->status !=	chip->lasttime_status) {
 
 		chip->lasttime_vcell = chip->vcell;
 		chip->lasttime_soc = chip->soc;
-		chip->lasttime_status = chip->status;
 
 		power_supply_changed(&chip->battery);
 	}
@@ -240,13 +239,14 @@ static void max17048_battery_status(enum charging_states status,
 	chip->ac_online = 0;
 	chip->usb_online = 0;
 
-	if (status == progress) {
+	if (chrg_type == AC)
+		chip->ac_online = 1;
+	else if (chrg_type == USB)
+		chip->usb_online = 1;
+
+	if (status == progress)
 		chip->status = POWER_SUPPLY_STATUS_CHARGING;
-		if (chrg_type == AC)
-			chip->ac_online = 1;
-		else if (chrg_type == USB)
-			chip->usb_online = 1;
-	} else
+	else
 		chip->status = POWER_SUPPLY_STATUS_DISCHARGING;
 
 
@@ -571,9 +571,7 @@ static int max17048_resume(struct i2c_client *client)
 {
 	struct max17048_chip *chip = i2c_get_clientdata(client);
 
-	update_charger_status();
-
-	schedule_work(&chip->work);
+	schedule_delayed_work(&chip->work, MAX17048_DELAY);
 	return 0;
 }
 

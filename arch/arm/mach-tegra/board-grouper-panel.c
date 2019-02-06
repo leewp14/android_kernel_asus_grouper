@@ -27,7 +27,7 @@
 #include <linux/pwm_backlight.h>
 #include <asm/atomic.h>
 #include <linux/nvhost.h>
-#include <linux/nvmap.h>
+#include <mach/nvmap.h>
 #include <mach/irqs.h>
 #include <mach/iomap.h>
 #include <mach/dc.h>
@@ -679,11 +679,9 @@ static struct platform_device *grouper_gfx_devices[] __initdata = {
 	&grouper_nvmap_device,
 #endif
 	&tegra_pwfm0_device,
+	&grouper_backlight_device,
 };
 
-static struct platform_device *grouper_bl_devices[]  = {
-        &grouper_backlight_device,
-};
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 /* put early_suspend/late_resume handlers here for the display in order
@@ -698,6 +696,7 @@ static void grouper_panel_early_suspend(struct early_suspend *h)
 		fb_blank(registered_fb[0], FB_BLANK_POWERDOWN);
 	if (num_registered_fb > 1)
 		fb_blank(registered_fb[1], FB_BLANK_NORMAL);
+
 #ifdef CONFIG_TEGRA_CONVSERVATIVE_GOV_ON_EARLYSUPSEND
 	cpufreq_save_default_governor();
 	cpufreq_set_conservative_governor();
@@ -818,30 +817,24 @@ int __init grouper_panel_init(void)
 #endif
 
 	/* Copy the bootloader fb to the fb. */
-	tegra_move_framebuffer(tegra_fb_start, tegra_bootloader_fb_start,
-				min(tegra_fb_size, tegra_bootloader_fb_size));
+//	tegra_move_framebuffer(tegra_fb_start, tegra_bootloader_fb_start,
+//				min(tegra_fb_size, tegra_bootloader_fb_size));
 
 #if defined(CONFIG_TEGRA_GRHOST) && defined(CONFIG_TEGRA_DC)
 	if (!err)
 		err = nvhost_device_register(&grouper_disp1_device);
 
-        res = nvhost_get_resource_byname(&grouper_disp2_device,
-                                         IORESOURCE_MEM, "fbmem");
-        res->start = tegra_fb2_start;
-        res->end = tegra_fb2_start + tegra_fb2_size - 1;
-
+	res = nvhost_get_resource_byname(&grouper_disp2_device,
+					 IORESOURCE_MEM, "fbmem");
+	res->start = tegra_fb2_start;
+	res->end = tegra_fb2_start + tegra_fb2_size - 1;
 	if (!err)
 		err = nvhost_device_register(&grouper_disp2_device);
 #endif
-
 
 #if defined(CONFIG_TEGRA_GRHOST) && defined(CONFIG_TEGRA_NVAVP)
 	if (!err)
 		err = nvhost_device_register(&nvavp_device);
 #endif
-        if (!err)
-                err = platform_add_devices(grouper_bl_devices,
-                                ARRAY_SIZE(grouper_bl_devices));
-
 	return err;
 }

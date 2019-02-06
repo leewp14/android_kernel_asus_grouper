@@ -25,8 +25,7 @@
 #include "dev.h"
 #include "bus_client.h"
 
-static int __devinit isp_probe(struct nvhost_device *dev,
-	struct nvhost_device_id *id_table)
+static int __devinit isp_probe(struct nvhost_device *dev)
 {
 	int err = 0;
 
@@ -37,7 +36,6 @@ static int __devinit isp_probe(struct nvhost_device *dev,
 	return nvhost_client_device_init(dev);
 }
 
-#ifdef CONFIG_PM
 static int __exit isp_remove(struct nvhost_device *dev)
 {
 	/* Add clean-up */
@@ -48,7 +46,6 @@ static int isp_suspend(struct nvhost_device *dev, pm_message_t state)
 {
 	return nvhost_client_device_suspend(dev);
 }
-#endif
 
 static int isp_resume(struct nvhost_device *dev)
 {

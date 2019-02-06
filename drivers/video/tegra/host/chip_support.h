@@ -21,13 +21,13 @@
 #define _NVHOST_CHIP_SUPPORT_H_
 
 #include <linux/types.h>
-#include "bus.h"
-
-
 struct output;
+struct nvhost_waitchk;
 struct nvhost_userctx_timeout;
 struct nvhost_master;
 struct nvhost_channel;
+struct nvmap_handle;
+struct nvmap_client;
 struct nvhost_hwctx;
 struct nvhost_cdma;
 struct nvhost_intr;
@@ -36,9 +36,6 @@ struct nvhost_syncpt;
 struct nvhost_master;
 struct dentry;
 struct nvhost_job;
-struct nvhost_intr_syncpt;
-struct mem_handle;
-struct mem_mgr;
 
 struct nvhost_chip_support {
 	struct {
@@ -67,6 +64,11 @@ struct nvhost_chip_support {
 					 u32 syncpt_incrs,
 					 u32 syncval,
 					 u32 nr_slots);
+		void (*timeout_pb_incr)(struct nvhost_cdma *,
+					u32 getptr,
+					u32 syncpt_incrs,
+					u32 nr_slots,
+					bool exec_ctxsave);
 	} cdma;
 
 	struct {
@@ -74,7 +76,8 @@ struct nvhost_chip_support {
 		int (*init)(struct push_buffer *);
 		void (*destroy)(struct push_buffer *);
 		void (*push_to)(struct push_buffer *,
-				struct mem_mgr *, struct mem_handle *,
+				struct nvmap_client *,
+				struct nvmap_handle *,
 				u32 op1, u32 op2);
 		void (*pop_from)(struct push_buffer *,
 				 unsigned int slots);
@@ -103,8 +106,11 @@ struct nvhost_chip_support {
 		void (*read_wait_base)(struct nvhost_syncpt *, u32 id);
 		u32 (*update_min)(struct nvhost_syncpt *, u32 id);
 		void (*cpu_incr)(struct nvhost_syncpt *, u32 id);
-		int (*patch_wait)(struct nvhost_syncpt *sp,
-				void *patch_addr);
+		int (*wait_check)(struct nvhost_syncpt *sp,
+				  struct nvmap_client *nvmap,
+				  u32 waitchk_mask,
+				  struct nvhost_waitchk *wait,
+				  int num_waitchk);
 		void (*debug)(struct nvhost_syncpt *);
 		const char * (*name)(struct nvhost_syncpt *, u32 id);
 		int (*mutex_try_lock)(struct nvhost_syncpt *,
@@ -127,39 +133,9 @@ struct nvhost_chip_support {
 	} intr;
 
 	struct {
-		struct nvhost_device *(*get_nvhost_device)(char *name);
-		struct nvhost_channel *(*alloc_nvhost_channel)(int chid);
-		void (*free_nvhost_channel)(struct nvhost_channel *ch);
+		struct nvhost_device *(*get_nvhost_device)(struct nvhost_master *host,
+			char *name);
 	} nvhost_dev;
-
-	struct {
-		struct mem_mgr *(*alloc_mgr)(void);
-		void (*put_mgr)(struct mem_mgr *);
-		struct mem_mgr *(*get_mgr)(struct mem_mgr *);
-		struct mem_mgr *(*get_mgr_file)(int fd);
-		struct mem_handle *(*alloc)(struct mem_mgr *,
-				size_t size, size_t align,
-				int flags);
-		struct mem_handle *(*get)(struct mem_mgr *, u32 id);
-		void (*put)(struct mem_mgr *, struct mem_handle *);
-		phys_addr_t (*pin)(struct mem_mgr *, struct mem_handle *);
-		void (*unpin)(struct mem_mgr *, struct mem_handle *);
-		void *(*mmap)(struct mem_handle *);
-		void (*munmap)(struct mem_handle *, void *);
-	} mem;
 };
-
-struct nvhost_chip_support *nvhost_get_chip_ops(void);
-
-#define host_device_op()	nvhost_get_chip_ops()->nvhost_dev
-#define channel_cdma_op()	nvhost_get_chip_ops()->cdma
-#define channel_op()		nvhost_get_chip_ops()->channel
-#define syncpt_op()		nvhost_get_chip_ops()->syncpt
-#define intr_op()		nvhost_get_chip_ops()->intr
-#define cdma_op()		nvhost_get_chip_ops()->cdma
-#define cdma_pb_op()		nvhost_get_chip_ops()->push_buffer
-#define mem_op()		(nvhost_get_chip_ops()->mem)
-
-int nvhost_init_chip_support(struct nvhost_master *);
 
 #endif /* _NVHOST_CHIP_SUPPORT_H_ */

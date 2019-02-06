@@ -29,10 +29,6 @@ CFLAGS_decompress.o := -Os
 endif
 FONTC	= $(srctree)/drivers/video/console/font_acorn_8x8.c
 
-# string library code (-Os is enforced to keep it much smaller)
-OBJS		+= string.o
-CFLAGS_string.o	:= -Os
-
 #
 # Architecture dependencies
 #
@@ -112,9 +108,6 @@ endif
 ccflags-y := -fpic -fno-builtin
 asflags-y := -DZIMAGE
 
-# Supply kernel BSS size to the decompressor via a linker symbol.
-KBSS_SZ = $(shell size $(obj)/../../../../vmlinux | awk 'END{print $$3}')
-LDFLAGS_vmlinux = --defsym _kernel_bss_size=$(KBSS_SZ)
 # Supply ZRELADDR to the decompressor via a linker symbol.
 ifneq ($(CONFIG_AUTO_ZRELADDR),y)
 LDFLAGS_vmlinux += --defsym zreladdr=$(ZRELADDR)

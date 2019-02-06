@@ -51,8 +51,6 @@
 #define ICTLR_COP_IER_CLR	0x38
 #define ICTLR_COP_IEP_CLASS	0x3c
 
-#define TEGRA_MAX_NUM_ICTLRS	6
-
 #define NUM_ICTLRS (INT_MAIN_NR/32)
 #define FIRST_LEGACY_IRQ 32
 
@@ -70,8 +68,6 @@ static void __iomem *ictlr_reg_base[] = {
 static u32 cop_ier[NUM_ICTLRS];
 static u32 cpu_ier[NUM_ICTLRS];
 static u32 cpu_iep[NUM_ICTLRS];
-
-static u32 ictlr_wake_mask[TEGRA_MAX_NUM_ICTLRS];
 #endif
 
 static inline void tegra_irq_write_mask(unsigned int irq, unsigned long reg)
@@ -154,12 +150,6 @@ static int tegra_legacy_irq_suspend(void)
 		cpu_iep[i] = readl(ictlr + ICTLR_CPU_IEP_CLASS);
 		cop_ier[i] = readl(ictlr + ICTLR_COP_IER);
 		writel(~0, ictlr + ICTLR_COP_IER_CLR);
-
-		/* disable CPU interrupts */
-		writel(~0, ictlr + ICTLR_CPU_IER_CLR);
-
-		/* enable lp1 wake sources */
-		writel(ictlr_wake_mask[i], ictlr + ICTLR_CPU_IER_SET);
 	}
 	local_irq_restore(flags);
 
