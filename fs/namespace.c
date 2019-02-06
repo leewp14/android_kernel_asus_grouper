@@ -2705,7 +2705,7 @@ static void __init init_mount_tree(void)
 	get_mnt_ns(ns);
 
 	root.mnt = ns->root;
-	root.dentry	= ns->root->mnt_root;
+	root.dentry = ns->root->mnt_root;
 
 	set_fs_pwd(current->fs, &root);
 	set_fs_root(current->fs, &root);
